@@ -38,6 +38,10 @@ contains
    !
    call read_boundary_data()
    !
+   ! read wind data if specified
+   !
+   call read_wind_data()   
+   !
    snapwave_no_nodes = no_nodes
    !
    allocate(snapwave_z(no_nodes))
@@ -285,15 +289,6 @@ contains
    call read_real_input(500,'snapwave_crit',crit,0.01)
    call read_int_input(500,'snapwave_igwaves',iig,1)
    call read_int_input(500,'snapwave_nrsweeps',nr_sweeps,1)
-!   call read_int_input(500,'ntheta',ntheta,36)
-!   call read_int_input(500,'nHrel',nHrel,1)
-!   call read_char_input(500,'hhtabname',hhtabname,'')
-!   call read_char_input(500,'Htabname',Htabname,'')
-!   call read_char_input(500,'Dwtabname',Dwtabname,'')
-!   call read_char_input(500,'Ftabname',Ftabname,'')
-!   call read_char_input(500,'Cgtabname',Cgtabname,'')
-!   call read_char_input(500,'cthetafactabname',cthetafactabname,'')
-!   call read_char_input(500,'waterlevelfile',waterlevelfile,'')
    call read_char_input(500,'snapwave_jonswapfile',jonswapfile,'')
    call read_char_input(500,'snapwave_bndfile',bndfile,'')
    call read_char_input(500,'snapwave_encfile',encfile,'')
@@ -305,6 +300,18 @@ contains
    call read_char_input(500,'snapwave_mskfile',mskfile,'')
    call read_char_input(500,'snapwave_depfile',depfile,'none')   
    call read_char_input(500,'snapwave_ncfile', gridfile,'snapwave_net.nc')   
+   !
+   call read_char_input(500,'windlistfile',windlistfile,'')
+   call read_int_input(500,'map_Hm0',map_Hm0,1)
+   call read_int_input(500,'map_Hig',map_Hig,0)
+   call read_int_input(500,'map_Tp',map_Tp,1)
+   call read_int_input(500,'map_dir',map_dir,1)
+   call read_int_input(500,'map_Cg',map_Cg,0)
+   call read_int_input(500,'map_Dw',map_Dw,0)
+   call read_int_input(500,'map_Df',map_Df,0)
+   call read_int_input(500,'map_Sw',map_Sw,0)
+   call read_int_input(500,'map_St',map_St,0)
+   call read_int_input(500,'map_ee',map_ee,0)   
    !
    close(500)
    !

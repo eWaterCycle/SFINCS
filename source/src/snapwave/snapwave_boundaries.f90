@@ -1,8 +1,8 @@
 module snapwave_boundaries
-
+   !
 contains   
-   
-   subroutine read_boundary_data()
+   !
+subroutine read_boundary_data()
    !
    ! Reads bnd, bhs, spw etc. files
    !Boundary conditions > lever tp, Hs en wave dir aand (ook dirspr?) en zet om naar spectrum op de randcellen (ntheta, nsigma) > JONSWAP met gamma als user waarde
@@ -15,10 +15,10 @@ contains
    !
    implicit none
    !
-   nwbnd  = 0
+   nwbnd = 0
    ntwbnd = 0
-   update_grid_boundary_points = .true.
    itwbndlast = 2
+   itwindbndlast = 1
    !
    if (jonswapfile /= '') then
       !
@@ -38,41 +38,9 @@ contains
    !
    call find_boundary_indices()
    !
-   end subroutine
-
-   
-   subroutine read_boundary_enclosure ()
-   !
-   ! Reads enc file
-   !
-   use snapwave_data
-   !
-   implicit none
-   !
-   integer n, itb, ib, stat, ifreq
-   !
-   real*4 dummy,r
-   !
-   ! Read wave boundaries
-   !
-   write(*,*)'Reading wave boundary enclosure ...'
-   open(500, file=trim(encfile)) !as in bwvfile of SFINCS
-   do while(.true.)
-      read(500,*,iostat = stat)dummy
-      if (stat<0) exit
-      n_bndenc=n_bndenc+1
-   enddo
-   rewind(500)
-   allocate(x_bndenc(n_bndenc))
-   allocate(y_bndenc(n_bndenc))
-   do n = 1, n_bndenc
-      read(500,*)x_bndenc(n),y_bndenc(n)
-   enddo
-   close(500)
-   !
-   end subroutine
-
-   subroutine read_boundary_data_singlepoint()
+end subroutine read_boundary_data
+!
+subroutine read_boundary_data_singlepoint()
    !
    ! Reads jonswap and water level file for single point
    ! t(s) Hm0 Tp dir ms zst
@@ -128,15 +96,12 @@ contains
    !
    ntwbnd = nrec
    !
-   end subroutine 
-
-   
-   
-   
-   subroutine read_boundary_data_timeseries()
+end subroutine read_boundary_data_singlepoint
+!
+subroutine read_boundary_data_timeseries()
    !
    ! Reads bnd, bhs, spw etc. files
-   ! Boundary conditions > lever tp, Hs en wave dir aand (ook dirspr?) en zet om naar spectrum op de randcellen (ntheta, nsigma) > JONSWAP met gamma als user waarde
+   !Boundary conditions > lever tp, Hs en wave dir aand (ook dirspr?) en zet om naar spectrum op de randcellen (ntheta, nsigma) > JONSWAP met gamma als user waarde
    !
    use snapwave_data
    !
@@ -254,11 +219,9 @@ contains
       !
    endif
    !
-   end subroutine
-   !
-   !
-   !
-   subroutine find_boundary_indices()
+end subroutine read_boundary_data_timeseries
+!
+subroutine find_boundary_indices()
    !
    use snapwave_data
    !
@@ -359,8 +322,8 @@ contains
       enddo
    endif
    !
-   end subroutine   
-   
+end subroutine find_boundary_indices  
+!   
 subroutine update_boundary_conditions(t)
    !
    ! Update all wave boundary conditions
@@ -369,50 +332,102 @@ subroutine update_boundary_conditions(t)
    !
    implicit none
    !
-   real*8           :: t
-   !
+   real*8, intent(in)        :: t
+   !   
    ! Update boundary conditions at boundary points
-!   write(*,*)'t=',t
    !
    call update_boundary_points(t)
+   !
+   ! Update wind forcing 
+   !
+   call update_wind_field(t)
+   !
+   ! Update the upwind neighbours on 360 dir-grid given the updated wind direction
+   !
+   call update_upwind_neigbours_wind()   
+   !
+   ! Make directional grid around boundary mean wave/wind direction
+   !
+   if (ntwbnd > 0) then
+      call make_theta_grid(wdmean_bwv)
+   else
+      call make_theta_grid(u10dmean)
+   endif 
+   !
+   ! Build spectra on the boundary support points
+   !
+   call build_boundary_support_points_spectra()
    !
    ! Update boundary conditions at grid points
    !
    call update_boundaries()
    !
-   end subroutine   
-   
-   subroutine update_boundary_points(t)
+end subroutine update_boundary_conditions  
+!
+subroutine update_upwind_neigbours_wind()
    !
-   ! Update vardens at boundary points
+   use snapwave_data
+   use snapwave_domain, only: find_upwind_neighbours_1dir
+   !
+   implicit none
+   !
+   real*4, dimension(ntheta360) :: windspread360k
+   integer                      :: itheta, k, count
+   !
+   ! Find the upwind neigbours in each cell for wind direction
+   !
+   call find_upwind_neighbours_1dir(x,y,no_nodes,sferic,kp,np, u10dir, wu10, prevu10, dsu10)
+   !
+   ! approximate grid resolution to closed upwind boundary with half of the ds360 average
+   !
+   do k = 1, no_nodes
+       if (dsu10(k) == 0.0) then
+          !
+          count = 0
+          do itheta = 1, ntheta360
+              !
+              if (ds360(itheta, k) > 0.0) then
+                  count = count + 1
+              endif
+              !
+          enddo
+          !
+          dsu10(k) = sum(ds360(:, k)) / count / 2.0
+          !
+       endif 
+   enddo 
+   !
+   ! Update the distribution array of wind input
+   ! 
+   do k = 1, no_nodes
+     windspread360k = (cos(theta360-u10dir(k)))**2.0
+     where(cos(theta360-u10dir(k))<0.0) windspread360k = 0.0
+     windspread360k = (windspread360k/sum(windspread360k))/dtheta ! normalized and converted to input per rad
+     windspread360(:,k) = windspread360k
+   enddo
+   !
+end subroutine update_upwind_neigbours_wind
+!
+subroutine update_boundary_points(t)
+   !
+   ! Update boundary conditions at boundary points
    !
    use snapwave_data
    !
    implicit none
    !
-   integer i, k, ib, itb, itsp2now, itheta, i1, i2, ii, jj, ind
-   !
-   real*8  :: t
+   real*8, intent(in)  :: t
+   !   
+   integer ib, itb
    !
    real*4  :: tbfac
-   real*4  :: hs, tps, wd, dsp, zst, thetamin, thetamax, E0, ms, modth
-   logical :: always_update_bnd_spec
+   real*4  :: hs, tps, wd, dsp, zst
    !
-!   write(*,*)'dtheta',dtheta
-   always_update_bnd_spec = .true.
-   !
-   ! Update directional spectra on boundary points from time series
-   !
-   ! First interpolate boundary conditions in timeseries to boundary points
-   !
-   update_grid_boundary_points = .true.
-   !
-   ! Interpolate boundary conditions in time
+   ! Interpolate boundary conditions in timeseries to boundary points
    !
    do itb = itwbndlast, ntwbnd ! Loop in time
-!      write(*,*)itb,t_bwv(itb)
       !
-      if (t_bwv(itb)>t) then
+      if (t_bwv(itb)>t .or. itb==ntwbnd) then
          !
          tbfac  = (t - t_bwv(itb - 1))/(t_bwv(itb) - t_bwv(itb - 1))
          !
@@ -443,21 +458,106 @@ subroutine update_boundary_conditions(t)
    !
    ! Average wave period and direction to determine theta grid
    !
-   tpmean_bwv = sum(tpt_bwv)/size(tpt_bwv)
-   zsmean_bwv = sum(zst_bwv)/size(zst_bwv)
-   depth      = max(zsmean_bwv - zb,hmin)
-   wdmean_bwv = atan2(sum(sin(wdt_bwv)*hst_bwv)/sum(hst_bwv), sum(cos(wdt_bwv)*hst_bwv)/sum(hst_bwv))
+   if (ntwbnd > 0) then
+      tpmean_bwv = sum(tpt_bwv)/size(tpt_bwv)
+      zsmean_bwv = sum(zst_bwv)/size(zst_bwv)
+      depth = max(zsmean_bwv-zb,hmin)
+      wdmean_bwv = atan2(sum(sin(wdt_bwv)*hst_bwv)/sum(hst_bwv),sum(cos(wdt_bwv)*hst_bwv)/sum(hst_bwv))  
+   else
+      depth = max(zsini-zb,hmin)
+   endif
+   !         
+end subroutine update_boundary_points
+!
+subroutine update_wind_field(t)
+   !
+   ! Update wind field at all grid cells
+   !
+   use snapwave_data
+   !
+   implicit none
+   !
+   real*8, intent(in)  :: t
+   !   
+   integer ib, itb, k
+   real*4, dimension(:), allocatable :: windspread360k
+   !
+   real*4  :: tbfac
+   real*4  :: u10k, u10dirk
+   !
+   allocate(windspread360k(ntheta360))
+   !
+   ! Interpolate boundary conditions in timeseries to boundary points
+   !
+   if (ntu10bnd==1) then
+       !
+       ! Just one 
+       !
+       do k=1, no_nodes
+           u10(k) = u10_bwv(1, k)
+           u10dir(k) = u10dir_bwv(1, k)
+       enddo
+       !
+   else
+       
+      do itb = itwindbndlast, ntu10bnd ! Loop in time
+         !
+         if (t_u10_bwv(itb)>t .or. itb==ntu10bnd) then
+            !
+            tbfac  = (t - t_u10_bwv(itb - 1))/(t_u10_bwv(itb) - t_u10_bwv(itb - 1))
+            !
+            do k = 1, no_nodes ! Loop along boundary points
+               !
+               u10k    = u10_bwv(itb - 1, k) + (u10_bwv(itb, k) - u10_bwv(itb - 1, k))*tbfac
+               !
+               call weighted_average(u10dir_bwv(itb - 1, k), u10dir_bwv(itb, k), 1.0 - tbfac, 2, u10dirk)  
+               !
+               u10(k) = u10k
+               u10dir(k) = u10dirk                  
+               !
+            enddo
+            !
+            itwindbndlast = itb
+            exit
+            !
+         endif
+         ! 
+      enddo
+      !
+   endif
+   ! average wind direction
+   ! 
+   u10dmean = atan2(sum(sin(u10dir)*u10)/sum(u10),sum(cos(u10dir)*u10)/sum(u10))  
+   !
+   ! Initialize the distribution array of wind input
+   ! 
+   do k = 1,no_nodes
+   windspread360k = (cos(theta360-u10dir(k)))**2.0
+   where(cos(theta360-u10dir(k))<0.0) windspread360k = 0.0
+   windspread360k = (windspread360k/sum(windspread360k))/dtheta ! normalized and converted to input per rad
+   windspread360(:,k) = windspread360k
+   enddo
+   !   
+end subroutine update_wind_field
+!    
+subroutine make_theta_grid(central_theta)
+   !
+   ! make theta grid based on boundary mean wave direction
+   !
+   use snapwave_data
+   !
+   implicit none
+   !
+   real, intent(in) :: central_theta
+   integer k, itheta, ind
    !
    ! Determine theta grid and adjust w, prev and ds tables
    !
    ! Definition of directional grid
-   !
-   thetamean = wdmean_bwv
-   
-   ind = nint(thetamean/dtheta) + 1
+   !   
+   ind=nint(central_theta/dtheta)-ntheta/2;
    do itheta = 1, ntheta
-!      i360(itheta) = mod2(itheta + ind - 10, 36)
-      i360(itheta) = mod2(itheta + ind - (1+ntheta/2), ntheta*2)
+      i360(itheta)=mod2(itheta+ind,ntheta360)
    enddo
    !
    do itheta = 1, ntheta
@@ -470,35 +570,41 @@ subroutine update_boundary_conditions(t)
          prev(1, itheta, k) = prev360(1, i360(itheta), k)
          prev(2, itheta, k) = prev360(2, i360(itheta), k)
          ds(itheta, k)      = ds360(i360(itheta), k)
+         !
+         windspread(itheta, k) = windspread360(i360(itheta), k)
       enddo
       !
-   enddo   
+   enddo  
    !
-   ! Build spectra on wave boundary support points
+end subroutine make_theta_grid
+!
+subroutine build_boundary_support_points_spectra()
+   !
+   ! Update directional spectra on boundary points from time series
+   !
+   !
+   use snapwave_data
+   !
+   implicit none
+   !
+   integer ib
+   !
+   real*4  :: E0, ms
+   !
+   thetamean = wdmean_bwv
    !
    !write(*,*)' thetamean = ',thetamean*180./pi
    !write(*,'(a,18f7.1)')'theta = ',theta*180./pi
    do ib = 1, nwbnd ! Loop along boundary points
-      E0   = 0.0625*rho*g*hst_bwv(ib)**2  !QUESTION TL: why 1/16 instead of 1/8?
-      ms   = 1.0/dst_bwv(ib)**2-1
+      E0   = 0.0625*rho*g*hst_bwv(ib)**2
+      ms = 1.0/dst_bwv(ib)**2-1
       dist = (cos(theta - thetamean))**ms
-!      where (abs(mod(pi + theta - thetamean, 2*pi) - pi)>pi/2) dist = 0.0
-!      if (t> 405000.0) then
-!         write(*,'(a,i8,40e14.4)')'E',ib,E0,ms,dist
-!         endif
-      do itheta = 1, ntheta
-!         modth = mod2real(pi + theta(itheta) - thetamean, 2*pi)
-!         if (abs(modth)>0.5*pi) then
-!            dist(itheta) = 0.0
-!         endif   
-      enddo   
+      where (abs(mod(pi+theta - thetamean,2*pi)-pi)>0.999*pi/2) dist = 0.0
       eet_bwv(:,ib) = dist/sum(dist)*E0/dtheta
-!      write(*,'(a,18f7.0)')' ee          ',eet_bwv(:,ib)
    enddo
-   
-   !         
-end subroutine
-   
+   !
+end subroutine build_boundary_support_points_spectra
+!
 subroutine update_boundaries()
    !
    ! Update values at boundary points
@@ -515,6 +621,7 @@ subroutine update_boundaries()
    ! Loop through grid boundary points
    ! Now for all grid boundary points do spatial interpolation of the wave spectra from boundary points at polygon
    !
+   open(113,file='testbnd.txt')
    do ib = 1, nb
       !
       k = nmindbnd(ib)
@@ -524,13 +631,236 @@ subroutine update_boundaries()
          ee(i,k) = eet_bwv(i,ind1_bwv_cst(ib))*fac_bwv_cst(ib)  + eet_bwv(i,ind2_bwv_cst(ib))*(1.0 - fac_bwv_cst(ib))
          !                 
       enddo
+      Tp(k) = Tpt_bwv(ind1_bwv_cst(ib))*fac_bwv_cst(ib)  + Tpt_bwv(ind2_bwv_cst(ib))*(1.0 - fac_bwv_cst(ib))
+      write(113,*)ib,k,(ee(i,k),i=1,ntheta)
+   enddo
+   close(113)
+   !
+   ! Update initial wave period to average bwv if not specified in .inp
+   !
+   if (broadcast_Tp_bwc) then
+       Tpini = tpmean_bwv
+   endif
+   !
+end subroutine update_boundaries   
+!
+subroutine read_wind_data()
+   !
+   use snapwave_data
+   use snapwave_domain, only: read_interpolate_map_input
+   !
+   implicit none
+   !
+   real*4  :: u10_0, u10dir_0
+   logical                                     :: fileu10_exists, fileu10dir_exists
+   !
+   if (windlistfile /= '') then
       !
+      ! Read data from windlistfile: timeseries of spatially uniform / varying winds
+      !
+      call read_wind_data_from_list()
+      !
+   else
+      !
+      ! only one wind boundary condition given, read from .inp
+      ! 
+      ntu10bnd = 1
+      !
+      allocate(t_u10_bwv(ntu10bnd))   
+      allocate(u10_bwv(ntu10bnd, no_nodes))
+      allocate(u10dir_bwv(ntu10bnd, no_nodes))
+      
+      inquire(file=trim(u10str), exist=fileu10_exists)
+      inquire(file=trim(u10dirstr), exist=fileu10dir_exists)
+      !
+      if (fileu10_exists) then
+         !
+         call read_interpolate_map_input(u10str,no_nodes, x, y, sferic, u10_bwv(1, :))
+         !
+      else
+         !
+         write(*,*)'u10 has uniform value of ', trim(u10str)
+         read( u10str, '(f10.4)' )  u10_0
+         u10_bwv(1, :) = u10_0
+         !
+      endif
+      !
+      if (fileu10dir_exists) then
+          !
+          call read_interpolate_map_input(u10dirstr,no_nodes, x, y, sferic, u10dir_bwv(1,:))
+          !
+      else
+          !
+          write(*,*)'u10 has uniform value of ', trim(u10dirstr)
+          read( u10dirstr, '(f10.4)' )  u10dir_0 
+          u10dir_bwv(1, :) = u10dir_0 
+          !
+      endif
+      !
+      u10dir_bwv=mod(270.0-u10dir_bwv, 360.0)*(4.0*atan(1.0))/180.0 ! from nautical coming from in degrees to cartesian going to in radians
+      !
+   endif  
+end subroutine read_wind_data
+!
+subroutine read_wind_data_from_list()
+   !
+   use snapwave_data
+   use snapwave_domain, only: read_interpolate_map_input
+   !
+   implicit none
+   !
+   integer :: irec
+   integer :: ier
+   integer :: it
+   real*4  :: dum
+   real*4                              :: u10dir_0, u10_0
+   character*256                       :: u10str_it, u10dirstr_it
+   logical                             :: fileu10_exists, fileu10dir_exists
+   !   
+   write(*,*)'Reading windlist file ', trim(windlistfile), ' ...'
+   !
+   ! Find out how many consecutive wind fields are given
+   !
+   open(11,file=windlistfile)
+   irec=0
+   ier=0
+   do while (ier==0)
+      read(11,*,iostat=ier)dum
+      irec = irec + 1
    enddo
    !
-   end subroutine   
-   
-   
-   subroutine weighted_average(val1,val2,fac,iopt,val3) ! as in sfincs_boundaries.f90
+   ntu10bnd = irec - 1
+   !
+   allocate(t_u10_bwv(ntu10bnd))   
+   allocate(u10_bwv(ntu10bnd, no_nodes))
+   allocate(u10dir_bwv(ntu10bnd, no_nodes))
+   !   
+   ! Read all timestamps line by line 
+   !
+   rewind(11)
+   do it = 1, ntu10bnd
+      ! 
+      read(11,*)t_u10_bwv(irec),u10str_it,u10dirstr_it   
+      !
+      inquire(file=trim(u10str_it), exist=fileu10_exists)
+      inquire(file=trim(u10dirstr_it), exist=fileu10dir_exists)
+      !
+      ! read wind magnitude
+      !
+      if (fileu10_exists) then
+         ! 
+         call read_interpolate_map_input(u10str_it,no_nodes, x, y, sferic, u10_bwv(it,:))
+         !
+      else   
+         !
+         ! convert read value to double, and assign uniformly to grid
+         !
+         write(*,*)'u10_it has uniform value of ', trim(u10dirstr)
+         read(u10str_it, '(f10.4)' )  u10_0
+         u10_bwv(it, :) = u10dir_0
+         !
+      endif
+      !
+      ! read wind direction
+      !
+      if (fileu10dir_exists) then
+         ! 
+         call read_interpolate_map_input(u10dirstr_it,no_nodes, x, y, sferic, u10dir_bwv(it,:))
+         !
+      else   
+         !
+         ! convert read value to double, and assign uniformly to grid
+         !
+         write(*,*)'u10_it has uniform value of ', trim(u10dirstr)
+         read(u10dirstr_it, '(f10.4)' )  u10dir_0
+         u10dir_bwv(it, :) = u10dir_0
+         !
+      endif
+      !
+      u10dir_bwv=mod(270.0-u10dir_bwv, 360.0)*(4.0*atan(1.0))/180.0 ! from nautical coming from in degrees to cartesian going to in radians
+      !
+      close(11)
+      !
+   enddo
+   !   
+end subroutine read_wind_data_from_list
+!
+!subroutine read_wind_field()
+!   !
+!   use snapwave_data
+!   use snapwave_domain, only: read_interpolate_map_input, find_upwind_neighbours_1dir
+!   !
+!   implicit none
+!   !
+!   real*4, dimension(ntheta360) :: windspread360k
+!   real*4                       :: u10_0, u10dir_0
+!   integer                      :: file_exists, k, itheta, count
+!
+!   !
+!   ! Spatially-uniform/varying wind field magnitude
+!   !
+!   inquire(file=trim(u10str), exist=file_exists)
+!   if (file_exists) then
+!       call read_interpolate_map_input(u10str,no_nodes, x, y, sferic, u10)
+!   else   
+!       ! convert read value to double, and assign uniformly to grid
+!       write(*,*)'u10 has uniform value of ', trim(u10str)
+!       read( u10str, '(f10.4)' )  u10_0
+!       u10=u10_0
+!   endif
+!   !
+!   ! Spatially-uniform/varying wind field direction
+!   !
+!   inquire(file=trim(u10dirstr), exist=file_exists)
+!   if (file_exists) then
+!       call read_interpolate_map_input(u10dirstr,no_nodes, x, y, sferic, u10dir)
+!   else   
+!       ! convert read value to double, and assign uniformly to grid
+!       write(*,*)'u10dir has uniform value of ', trim(u10dirstr)
+!       read(u10dirstr, '(f10.4)' )  u10dir_0
+!       u10dir=u10dir_0
+!   endif
+!   u10dir=mod(270.0-u10dir, 360.0)*(4.0*atan(1.0))/180.0 ! from nautical coming from in degrees to cartesian going to in radians
+!   !
+!   ! average wind direction
+!   ! 
+!   u10dmean = atan2(sum(sin(u10dir)*u10)/sum(u10),sum(cos(u10dir)*u10)/sum(u10))  
+!   !
+!   ! Initialize the distribution array of wind input
+!   ! 
+!   do k = 1,no_nodes
+!      windspread360k = (cos(theta360-u10dir(k)))**2.0
+!      where(cos(theta360-u10dir(k))<0.0) windspread360k = 0.0
+!      windspread360k = (windspread360k/sum(windspread360k))/dtheta ! normalized and converted to input per rad
+!      windspread360(:,k) = windspread360k
+!   enddo
+!   !
+!   ! Find the upwind neigbours in each cell for wind direction
+!   !
+!   call find_upwind_neighbours_1dir(x, y, no_nodes, sferic, kp, np, u10dir, wu10,prevu10, dsu10)
+!   !
+!   ! approximate grid resolution to closed upwind boundary with half of the ds360 average
+!   !
+!   do k = 1, no_nodes
+!       if (dsu10(k) == 0.0) then
+!          !
+!          count = 0
+!          do itheta = 1, ntheta360
+!              !
+!              if (ds360(itheta, k) > 0.0) then
+!                  count = count + 1
+!              endif
+!              !
+!          enddo
+!          !
+!          dsu10(k) = sum(ds360(:, k)) / count / 2
+!          !
+!       endif 
+!   enddo 
+!   !
+!end subroutine read_wind_field
+!   
+subroutine weighted_average(val1,val2,fac,iopt,val3) ! as in sfincs_boundaries.f90
    !
    implicit none
    !
@@ -569,12 +899,12 @@ subroutine update_boundaries()
       !
    endif
    !
-   end subroutine
-   
-   function mod2 (a,b) result (c)
+end subroutine weighted_average
+!   
+function mod2 (a,b) result (c)
    integer a,b,c
    !
-   c = mod(a,b)
+   c=mod(a,b)
    if (c==0) c = b
    if (c<0)  c = c + b
    

@@ -9,18 +9,27 @@ module snapwave_ncoutput
    !
    type map_type
        integer :: ncid   
-       integer :: mesh2d_nNodes_dimid, mesh2d_nEdges_dimid, Two_dimid, mesh2d_nFaces_dimid, mesh2d_nMax_face_nodes_dimid, mesh2d_nMax_edge_nodes_dimid, time_dimid
+       integer :: mesh2d_nNodes_dimid, mesh2d_nEdges_dimid, ntheta_dimid, Two_dimid, mesh2d_nFaces_dimid, mesh2d_nMax_face_nodes_dimid, mesh2d_nMax_edge_nodes_dimid, time_dimid
        integer :: mesh2d_node_x_varid
        integer :: mesh2d_node_y_varid
        integer :: mesh2d_node_z_varid
        integer :: mesh2d_face_nodes_varid
        integer :: mesh2d_edge_nodes_varid
        integer :: crs_varid, grid_varid 
+       integer :: theta_varid
        integer :: time_varid
        integer :: hm0_varid
        integer :: hm0_ig_varid
        integer :: tp_varid
        integer :: wd_varid
+       integer :: cg_varid
+       integer :: dw_varid
+       integer :: df_varid
+       integer :: sw_varid
+       integer :: st_varid
+       integer :: ee_varid
+       integer :: fw_varid
+       integer :: fw_ig_varid
    end type
    type his_type
        integer :: ncid   
@@ -29,9 +38,9 @@ module snapwave_ncoutput
        integer :: runtime_dimid
        integer :: point_x_varid, point_y_varid, station_x_varid, station_y_varid, crs_varid  
        integer :: station_id_varid, station_name_varid
-       !integer :: zb_varid
+       integer :: zb_varid
        integer :: time_varid
-       integer :: hm0_varid, tp_varid, wavdir_varid, dirspr_varid
+       integer :: hm0_varid, tp_varid, wavdir_varid, dirspr_varid, hm0ig_varid, dw_varid, df_varid, sw_varid, st_varid
        integer :: vmag_varid, vdir_varid
        integer :: inp_varid, total_runtime_varid, average_dt_varid   
    end type
@@ -86,16 +95,19 @@ contains
    real*4, dimension(:), allocatable :: zsg
    !
    allocate(buf(no_nodes))
+   allocate(buf2(no_nodes,ntheta))
    !
    NF90(nf90_create(map_filename, NF90_CLOBBER, map_file%ncid))
    !
    ! Create dimensions
    ! grid, time, points
+   
    NF90(nf90_def_dim(map_file%ncid, 'mesh2d_nNodes', no_nodes, map_file%mesh2d_nNodes_dimid))
    NF90(nf90_def_dim(map_file%ncid, 'mesh2d_nFaces', no_faces, map_file%mesh2d_nFaces_dimid))
    NF90(nf90_def_dim(map_file%ncid, 'mesh2d_nMax_face_nodes', 4, map_file%mesh2d_nMax_face_nodes_dimid))
    NF90(nf90_def_dim(map_file%ncid, 'mesh2d_nEdges', no_edges, map_file%mesh2d_nEdges_dimid))
    NF90(nf90_def_dim(map_file%ncid, 'mesh2d_nMax_edge_nodes', 2, map_file%mesh2d_nMax_edge_nodes_dimid))
+   NF90(nf90_def_dim(map_file%ncid, 'ntheta', ntheta, map_file%ntheta_dimid)) ! theta
    NF90(nf90_def_dim(map_file%ncid, 'time', NF90_UNLIMITED, map_file%time_dimid)) ! time
 !   NF90(nf90_def_dim(map_file%ncid, 'runtime', 1, map_file%runtime_dimid)) ! total_runtime, average_dt       
    !
@@ -198,31 +210,105 @@ contains
    !
    ! Time varying map output
    !
-   NF90(nf90_def_var(map_file%ncid, 'hm0', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%hm0_varid)) ! time-varying wave height map
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, '_FillValue', FILL_VALUE))
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, 'units', 'm'))
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, 'standard_name', 'significant_wave_height')) 
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, 'long_name', 'Wave height Hm0'))  
+   if (map_Hm0) then
+      NF90(nf90_def_var(map_file%ncid, 'hm0', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%hm0_varid)) ! time-varying wave height map
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, 'units', 'm'))
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, 'standard_name', 'significant_wave_height')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_varid, 'long_name', 'Wave height Hm0'))  
+   endif
    !
-   NF90(nf90_def_var(map_file%ncid, 'hm0_ig', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%hm0_ig_varid)) ! time-varying wave height map
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, '_FillValue', FILL_VALUE))
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, 'units', 'm'))
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, 'standard_name', 'significant_infragravity_wave_height')) 
-   NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, 'long_name', 'Infragravity wave height Hm0ig'))  
+   if (map_Hig) then
+      NF90(nf90_def_var(map_file%ncid, 'hm0_ig', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%hm0_ig_varid)) ! time-varying wave height map
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, 'units', 'm'))
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, 'standard_name', 'significant_infragravity_wave_height')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%hm0_ig_varid, 'long_name', 'Infragravity wave height Hm0ig'))  
+   endif
    !
-   NF90(nf90_def_var(map_file%ncid, 'tp', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%tp_varid)) ! time-varying wave period map
-   NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, '_FillValue', FILL_VALUE))
-   NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, 'units', 's'))
-   NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, 'standard_name', 'peak period')) 
-   NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, 'long_name', 'Peak period Tp'))  
+   if (map_Tp) then
+      NF90(nf90_def_var(map_file%ncid, 'tp', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%tp_varid)) ! time-varying wave period map
+      NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, 'units', 's'))
+      NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, 'standard_name', 'peak period')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%tp_varid, 'long_name', 'Peak period Tp')) 
+   endif
    !
-   NF90(nf90_def_var(map_file%ncid, 'wd', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%wd_varid)) ! time-varying wave direction map
-   NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, '_FillValue', FILL_VALUE))
-   NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, 'units', 'deg N'))
-   NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, 'standard_name', 'mean wave direction')) 
-   NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, 'long_name', 'Mean wave direction'))  
+   if (map_dir) then
+      NF90(nf90_def_var(map_file%ncid, 'wd', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%wd_varid)) ! time-varying wave direction map
+      NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, 'units', 'deg N'))
+      NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, 'standard_name', 'mean wave direction')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%wd_varid, 'long_name', 'Mean wave direction'))  
+   endif
    !
+   if (map_cg) then
+      NF90(nf90_def_var(map_file%ncid, 'cg', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%cg_varid)) ! time-varying wave group velocity
+      NF90(nf90_put_att(map_file%ncid, map_file%cg_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%cg_varid, 'units', 'm/s'))
+      NF90(nf90_put_att(map_file%ncid, map_file%cg_varid, 'standard_name', 'wave group velocity')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%cg_varid, 'long_name', 'Wave group velocity'))  
+   endif
+   !
+   if (map_Dw) then
+      NF90(nf90_def_var(map_file%ncid, 'dw', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%dw_varid)) ! time-varying wave breaking map
+      NF90(nf90_put_att(map_file%ncid, map_file%dw_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%dw_varid, 'units', 'W'))
+      NF90(nf90_put_att(map_file%ncid, map_file%dw_varid, 'standard_name', 'depth induced breaking')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%dw_varid, 'long_name', 'Depth-induced wave breaking'))  
+   endif
+   !
+   if (map_Df) then
+      NF90(nf90_def_var(map_file%ncid, 'df', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%df_varid)) ! time-varying wave direction map
+      NF90(nf90_put_att(map_file%ncid, map_file%df_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%df_varid, 'units', 'W'))
+      NF90(nf90_put_att(map_file%ncid, map_file%df_varid, 'standard_name', 'bottom friction')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%df_varid, 'long_name', 'Bottom friction'))  
+   endif
+   !
+   if (map_Sw) then
+      NF90(nf90_def_var(map_file%ncid, 'sw', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%sw_varid)) ! time-varying wind input 
+      NF90(nf90_put_att(map_file%ncid, map_file%sw_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%sw_varid, 'units', 'W'))
+      NF90(nf90_put_att(map_file%ncid, map_file%sw_varid, 'standard_name', 'wind input')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%sw_varid, 'long_name', 'Wind input')) 
+   endif
+   !
+   if (map_St) then
+      NF90(nf90_def_var(map_file%ncid, 'st', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%st_varid)) ! time-varying change of wave period
+      NF90(nf90_put_att(map_file%ncid, map_file%st_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%st_varid, 'units', 's/m'))
+      NF90(nf90_put_att(map_file%ncid, map_file%st_varid, 'standard_name', 'delta wave period')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%st_varid, 'long_name', 'Delta wave period')) 
+   endif
+   !
+   if (map_ee) then
+      NF90(nf90_def_var(map_file%ncid, 'ee', NF90_FLOAT, (/map_file%ntheta_dimid, map_file%mesh2d_nNodes_dimid, map_file%time_dimid/), map_file%ee_varid)) ! time-varying wave energy density map
+      NF90(nf90_put_att(map_file%ncid, map_file%ee_varid, '_FillValue', FILL_VALUE))
+      NF90(nf90_put_att(map_file%ncid, map_file%ee_varid, 'units', 'J/m2/rad'))
+      NF90(nf90_put_att(map_file%ncid, map_file%ee_varid, 'standard_name', 'wave energy density')) 
+      NF90(nf90_put_att(map_file%ncid, map_file%ee_varid, 'long_name', 'Wave energy density'))  
+      !
+      NF90(nf90_def_var(map_file%ncid, 'theta', NF90_FLOAT, (/map_file%ntheta_dimid, map_file%time_dimid/), map_file%theta_varid)) ! theta grid
+      NF90(nf90_put_att(map_file%ncid, map_file%theta_varid, 'long_name', 'Wave directional grid '))   
+      NF90(nf90_put_att(map_file%ncid, map_file%theta_varid, 'start_index', 1))         
+      NF90(nf90_put_att(map_file%ncid, map_file%theta_varid, '_FillValue', FILL_VALUE))  
+   endif   
+   ! 
    ! Add for final output:
+   !
+   NF90(nf90_def_var(map_file%ncid, 'fw', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid/), map_file%fw_varid)) ! static fw
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_varid, 'units', '-'))
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_varid, 'standard_name', 'Short wave friction factor')) 
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_varid, 'long_name', 'Short wave friction factor')) 
+   !
+   NF90(nf90_def_var(map_file%ncid, 'fw_ig', NF90_FLOAT, (/map_file%mesh2d_nNodes_dimid/), map_file%fw_ig_varid)) ! static fw_ig
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_ig_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_ig_varid, 'units', '-'))
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_ig_varid, 'standard_name', 'IG wave friction factor')) 
+   NF90(nf90_put_att(map_file%ncid, map_file%fw_ig_varid, 'long_name', 'IG wave friction factor'))    
+   !
 !   NF90(nf90_def_var(map_file%ncid, 'total_runtime', NF90_FLOAT, (/map_file%runtime_dimid/),map_file%total_runtime_varid))
 !   NF90(nf90_put_att(map_file%ncid, map_file%total_runtime_varid, 'units', 's'))   
 !   NF90(nf90_put_att(map_file%ncid, map_file%total_runtime_varid, 'long_name', 'total_model_runtime_in_seconds'))
@@ -238,6 +324,9 @@ contains
    NF90(nf90_put_var(map_file%ncid, map_file%mesh2d_node_x_varid, x, (/1/))) 
    NF90(nf90_put_var(map_file%ncid, map_file%mesh2d_node_y_varid, y, (/1/))) 
    NF90(nf90_put_var(map_file%ncid, map_file%mesh2d_node_z_varid, zb, (/1/))) 
+   if (map_ee) then
+      NF90(nf90_put_var(map_file%ncid, map_file%theta_varid, theta, (/1/))) 
+   endif
    ! 
    ! now for cell corners
 !   NF90(nf90_put_var(map_file%ncid, map_file%corner_x_varid, xg(1:nmax - 1, 1:mmax - 1), (/1, 1/))) ! write xz of corners
@@ -248,7 +337,10 @@ contains
    !
 !   NF90(nf90_put_var(map_file%ncid, map_file%crs_varid, epsg))
    !
-   zsg = 0 ! initialise as inactive points       
+   zsg = 0 ! initialise as inactive points  
+   !
+   NF90(nf90_put_var(map_file%ncid, map_file%fw_varid, fw, (/1/))) 
+   NF90(nf90_put_var(map_file%ncid, map_file%fw_ig_varid, fw_ig, (/1/)))
    !   
    ! write away intermediate data
    !
@@ -323,11 +415,11 @@ contains
    NF90(nf90_def_var(his_file%ncid, 'crs', NF90_INT, his_file%crs_varid)) ! For EPSG code
    NF90(nf90_put_att(his_file%ncid, his_file%crs_varid, 'EPSG', '-'))   
    !
-   !NF90(nf90_def_var(his_file%ncid, 'point_zb', NF90_FLOAT, (/his_file%points_dimid/), his_file%zb_varid)) ! bed level in cell centre, for points
-   !NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, '_FillValue', FILL_VALUE))   
-   !NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, 'units', 'm'))
-   !NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, 'standard_name', 'altitude'))
-   !NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, 'long_name', 'bed_level_above_reference_level'))  
+   NF90(nf90_def_var(his_file%ncid, 'point_zb', NF90_FLOAT, (/his_file%points_dimid/), his_file%zb_varid)) ! bed level in cell centre, for points
+   NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, '_FillValue', FILL_VALUE))   
+   NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, 'units', 'm'))
+   NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, 'standard_name', 'altitude'))
+   NF90(nf90_put_att(his_file%ncid, his_file%zb_varid, 'long_name', 'bed_level_above_reference_level'))  
    !
    ! Time variables 
    trefstr_iso8601 = date_to_iso8601(trefstr)
@@ -361,7 +453,36 @@ contains
    !NF90(nf90_put_att(his_file%ncid, his_file%dirspr_varid, 'units', 'degree'))
    !NF90(nf90_put_att(his_file%ncid, his_file%dirspr_varid, 'standard_name', 'sea_surface_wave_directional_spread')) 
    !NF90(nf90_put_att(his_file%ncid, his_file%dirspr_varid, 'long_name', 'Wave directional spread (deg)'))  
-  
+   !
+   NF90(nf90_def_var(his_file%ncid, 'point_hm0ig', NF90_FLOAT, (/his_file%points_dimid, his_file%time_dimid/), his_file%hm0ig_varid)) ! time-varying wavdir
+   NF90(nf90_put_att(his_file%ncid, his_file%hm0ig_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(his_file%ncid, his_file%hm0ig_varid, 'units', 'm'))
+   NF90(nf90_put_att(his_file%ncid, his_file%hm0ig_varid, 'standard_name', 'sea_surface_wave_significant_height_infragravity')) 
+   NF90(nf90_put_att(his_file%ncid, his_file%hm0ig_varid, 'long_name', 'Significant infragravity wave height Hm0 (m)'))    ! indeed peak wave dir?
+   !   
+   NF90(nf90_def_var(his_file%ncid, 'point_dw', NF90_FLOAT, (/his_file%points_dimid, his_file%time_dimid/), his_file%dw_varid)) ! time-varying Dw
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'units', 'W'))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'standard_name', 'sea_surface_depth_induced_breaking')) 
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'long_name', 'Depth induced wave breaking (W)')) 
+   !   
+   NF90(nf90_def_var(his_file%ncid, 'point_df', NF90_FLOAT, (/his_file%points_dimid, his_file%time_dimid/), his_file%df_varid)) ! time-varying Df
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'units', 'W'))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'standard_name', 'sea_surface_bottom_friction')) 
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'long_name', 'Bottom friction (W)'))  
+   !   
+   NF90(nf90_def_var(his_file%ncid, 'point_Sw', NF90_FLOAT, (/his_file%points_dimid, his_file%time_dimid/), his_file%sw_varid)) ! time-varying Sw
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'units', 'W'))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'standard_name', 'sea_surface_wind_input')) 
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'long_name', 'Bottom friction (W)'))    
+   !   
+   NF90(nf90_def_var(his_file%ncid, 'point_St', NF90_FLOAT, (/his_file%points_dimid, his_file%time_dimid/), his_file%st_varid)) ! time-varying St
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, '_FillValue', FILL_VALUE))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'units', 's/s'))
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'standard_name', 'sea_surface_wave_period_wind_growth')) 
+   NF90(nf90_put_att(his_file%ncid, his_file%tp_varid, 'long_name', 'wave period growth (s/s)'))    
    !
    ! Add for final output:
    NF90(nf90_def_var(his_file%ncid, 'total_runtime', NF90_FLOAT, (/his_file%runtime_dimid/), his_file%total_runtime_varid))
@@ -401,30 +522,78 @@ contains
       implicit none   
       !
       real*8                       :: t  
+      real*4                       :: rad2deg
       !
       integer  :: ntmapout       
       !
       integer  :: k
       !
+      rad2deg = 180./pi
       !
       NF90(nf90_put_var(map_file%ncid, map_file%time_varid, t, (/ntmapout/))) ! write time
       !
-      buf = H*sqrt(2.0)
-      !where (depth<0.1) buf=-999.
-      NF90(nf90_put_var(map_file%ncid, map_file%hm0_varid, buf, (/1, ntmapout/))) ! write Hm0
+      if (map_Hm0==1) then
+         buf = H*sqrt(2.0)
+         !where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%hm0_varid, buf, (/1, ntmapout/))) ! write Hm0
+      endif
       !
-      buf = H_ig*sqrt(2.0)
-      where (depth<0.1) buf = -999.0
-      NF90(nf90_put_var(map_file%ncid, map_file%hm0_ig_varid, buf, (/1, ntmapout/))) ! write Hm0_ig
+      if (map_Hig==1) then
+         buf = H_ig*sqrt(2.0)
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%hm0_ig_varid, buf, (/1, ntmapout/))) ! write Hm0_ig
+      endif
       !           
-      buf = tpmean_bwv*H**0
-      where (depth<0.1) buf=-999.0
-      NF90(nf90_put_var(map_file%ncid, map_file%tp_varid, buf, (/1, ntmapout/))) ! write Tp
+      if (map_Tp==1) then
+         buf = Tp
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%tp_varid, buf, (/1, ntmapout/))) ! write Tp
+      endif
       ! 
-!      buf = amod(270.0 - thetam*180/pi + 360.0, 360.0)
-      buf = 0.0
-      where (depth<0.1) buf = -999.0
-      NF90(nf90_put_var(map_file%ncid, map_file%wd_varid, buf, (/1, ntmapout/))) ! write wave direction
+      if (map_dir==1) then
+         buf = modulo(270-thetam*180./pi+360.,360.)
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%wd_varid, buf, (/1, ntmapout/))) ! write wave direction
+      endif
+      !
+      if (map_Cg==1) then
+         buf = Cg
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%cg_varid, buf, (/1, ntmapout/))) ! write wave group velocity
+      endif
+      ! 
+      if (map_Dw==1) then
+         buf = Dw
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%dw_varid, buf, (/1, ntmapout/))) ! write wave breaking
+      endif
+      ! 
+      if (map_Df==1) then
+         buf = Df
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%df_varid, buf, (/1, ntmapout/))) ! write bottom friction
+      endif
+      ! 
+      if (map_Sw==1) then
+         buf = Sw
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%sw_varid, buf, (/1, ntmapout/))) ! write wind input
+      endif
+      ! 
+      if (map_St==1) then
+         buf = St
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%st_varid, buf, (/1, ntmapout/))) ! write wind input wave period
+      endif
+      !           
+      if (map_ee==1) then
+         buf2 = ee
+         where (depth<0.1) buf=-999.
+         NF90(nf90_put_var(map_file%ncid, map_file%ee_varid, buf2, (/1, 1, ntmapout/))) ! write wave energy density
+         !
+         buf1=modulo(270-theta*rad2deg,360.)
+         NF90(nf90_put_var(map_file%ncid, map_file%theta_varid, buf1, (/1, ntmapout/))) ! write theta grid
+      endif
       !           
       NF90(nf90_sync(map_file%ncid)) !write away intermediate data ! TL: in first test it seems to be faster to let the file update than keep in memory
       !      
@@ -447,11 +616,13 @@ contains
    !   
    NF90(nf90_put_var(his_file%ncid, his_file%hm0_varid, hm0obs, (/1, nthisout/))) ! write point_hm0
    !
-   NF90(nf90_put_var(his_file%ncid, his_file%tp_varid, tpmean_bwv*hm0obs**0, (/1, nthisout/))) ! write point_tp  
+   NF90(nf90_put_var(his_file%ncid, his_file%tp_varid, tpobs, (/1, nthisout/))) ! write point_tp  
    !   
    NF90(nf90_put_var(his_file%ncid, his_file%wavdir_varid, wdobs, (/1, nthisout/))) ! write point_wavdir
    !
-   !NF90(nf90_put_var(his_file%ncid, his_file%dirspr_varid, dirsprobs, (/1, nthisout/))) ! write point_tp      
+   !NF90(nf90_put_var(his_file%ncid, his_file%dirspr_varid, dirsprobs, (/1, nthisout/))) ! write point_tp 
+   !
+   NF90(nf90_put_var(his_file%ncid, his_file%hm0ig_varid, hm0igobs, (/1, nthisout/))) ! write point_hm0
    !
    NF90(nf90_sync(his_file%ncid)) !write away intermediate data ! TL: in first test it seems to be faster to let the file update than keep in memory
    !   
@@ -530,7 +701,7 @@ contains
    !
    ierror = nf90_inquire_dimension(idfile, iddim_no_nodes        , string, no_nodes        ); call nc_check_err(ierror, "inq_dim nNodes"         , gridfile)
    ierror = nf90_inquire_dimension(idfile, iddim_no_faces        , string, no_faces        ); call nc_check_err(ierror, "inq_dim nFaces"         , gridfile)
-   ierror = nf90_inquire_dimension(idfile, iddim_no_edges        , string, no_edges        ); call nc_check_err(ierror, "inq_dim nEdgess"        , gridfile)
+   ierror = nf90_inquire_dimension(idfile, iddim_no_edges        , string, no_edges        ); call nc_check_err(ierror, "inq_dim nEdges"        , gridfile)
 
    ierror = nf90_inq_varid(idfile, 'mesh2d_node_x'    , idvar_node_x      )                 ; call nc_check_err(ierror, "inq_varid node_x", gridfile)
    ierror = nf90_inq_varid(idfile, 'mesh2d_node_y'    , idvar_node_y      )                 ; call nc_check_err(ierror, "inq_varid node_y", gridfile)
