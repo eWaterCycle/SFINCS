@@ -1,0 +1,2 @@
+D:\repos\SnapWave\trunk\SnapWave\third_party_open\triangle\x64\Debug\triangle_c.lib
+D:\repos\SFINCS\source\third_party_open\triangle\x64\Debug\triangle_c.lib

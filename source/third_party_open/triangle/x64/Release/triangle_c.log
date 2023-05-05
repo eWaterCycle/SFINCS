@@ -1,0 +1,28 @@
+﻿  triangle.c
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3680,72): warning C4311: 'type cast': pointer truncation from 'triangle *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3686,64): warning C4311: 'type cast': pointer truncation from 'triangle *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3693,64): warning C4311: 'type cast': pointer truncation from 'triangle *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3700,64): warning C4311: 'type cast': pointer truncation from 'triangle *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3709,64): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3716,64): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3723,54): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3729,64): warning C4311: 'type cast': pointer truncation from 'subseg *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3734,64): warning C4311: 'type cast': pointer truncation from 'subseg *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3739,64): warning C4311: 'type cast': pointer truncation from 'subseg *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3775,31): warning C4311: 'type cast': pointer truncation from 'subseg *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3780,62): warning C4311: 'type cast': pointer truncation from 'subseg *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3787,62): warning C4311: 'type cast': pointer truncation from 'subseg *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3796,56): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3803,56): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3810,64): warning C4311: 'type cast': pointer truncation from 'triangle *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3817,64): warning C4311: 'type cast': pointer truncation from 'triangle *' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3826,56): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(3833,56): warning C4311: 'type cast': pointer truncation from 'vertex' to 'unsigned long'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(6956,29): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(9454,28): warning C4133: '=': incompatible types - from 'double *' to 'int *'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(9455,27): warning C4133: '=': incompatible types - from 'double *' to 'int *'
+D:\repos\SFINCS\source\third_party_open\triangle\triangle.c(12461,5): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  tricall2.c
+D:\repos\SFINCS\source\third_party_open\triangle\tricall2.c(237,46): warning C4554: '&': check operator precedence for possible error; use parentheses to clarify precedence
+D:\repos\SFINCS\source\third_party_open\triangle\tricall2.c(224,11): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  triangle_c.vcxproj -> D:\repos\SFINCS\source\third_party_open\triangle\x64\Release\triangle_c.lib

@@ -1,0 +1,1 @@
+D:\repos\SFINCS\source\third_party_open\triangle\x64\Release\triangle_c.lib
