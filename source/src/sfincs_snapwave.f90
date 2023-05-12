@@ -286,6 +286,9 @@ contains
    call read_real_input(500,'snapwave_dt',dt,36000.0)
    call read_real_input(500,'snapwave_tol',tol,10.0)
    call read_real_input(500,'snapwave_dtheta',dtheta,10.0)
+   call read_real_input(500,'snapwave_sector',sector,180.0)   
+   call read_int_input(500,'niter',niter, 10)
+   niter = niter*4  ! we sweep in four directions   
    call read_real_input(500,'snapwave_crit',crit,0.01)
    call read_int_input(500,'snapwave_igwaves',iig,1)
    call read_int_input(500,'snapwave_nrsweeps',nr_sweeps,1)
@@ -306,6 +309,12 @@ contains
    call read_char_input(500,'snapwave_u10',u10str,'0.0')
    call read_char_input(500,'snapwave_u10dir',u10dirstr,'270.0')
    call read_real_input(500,'snapwave_Tpini',Tpini,-999.0)   
+   !
+   if (Tpini==-999.0) then
+      broadcast_Tp_bwc = .True.
+   else
+      broadcast_Tp_bwc = .False.
+   endif   
    !
    call read_char_input(500,'snapwave_windlistfile',windlistfile,'')
    call read_int_input(500,'map_Hm0',map_Hm0,1)

@@ -251,6 +251,7 @@ subroutine initialize_snapwave_domain()
       ! If present read neumann polyline
       !
       call read_neumann_boundary()
+      !
       if (n_neu>0) then
          !
          call neuboundaries(x,y,no_nodes,x_neu,y_neu,n_neu,tol,neumannconnected)

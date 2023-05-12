@@ -62,7 +62,9 @@ module snapwave_solver
       !
       write(*,*)'max depth=',maxval(depth),' min depth = ',minval(depth)
       !call disper_approx(depth, Tp,    kwav,    nwav,    C,    Cg,    no_nodes)
-      call disper_approx(depth, Tp_ig, kwav_ig, nwav_ig, C_ig, Cg_ig, no_nodes)
+      !call disper_approx(depth, Tp_ig, kwav_ig, nwav_ig, C_ig, Cg_ig, no_nodes)      
+      call disper_approx(depth, Tpb,    kwav,    nwav,    C,    Cg,    no_nodes)
+      call disper_approx(depth, Tpb*7, kwav_ig, nwav_ig, C_ig, Cg_ig, no_nodes)
       cg_ig = cg   !TL: ??? is Cg = cg? And why put cg_ig equal to normal cg?
       !
       do k = 1, no_nodes
@@ -280,7 +282,6 @@ module snapwave_solver
       allocate(DoverE_ig(no_nodes))
       allocate(E_ig(no_nodes))
       allocate(T_ig(no_nodes))      
-      allocate(T_ig(no_nodes))
       allocate(sigm_ig(no_nodes))      
       !
    endif
@@ -778,10 +779,11 @@ module snapwave_solver
    !
    subroutine disper_approx(h,T,k,n,C,Cg,no_nodes)
    integer, intent(in)                :: no_nodes
-   real*4, dimension(no_nodes), intent(in)  :: h, T
+   real*4, dimension(no_nodes), intent(in)  :: h
+   !real*4, dimension(no_nodes), intent(in)  :: T
+   real*4, intent(in)                 :: T
    real*4, dimension(no_nodes), intent(out) :: k,n,C,Cg
-   real*4, dimension(no_nodes)        :: sigma
-   real*4                             :: g,pi
+   real*4                             :: sigma,g,pi
    !
    g     = 9.81
    pi    = 4.*atan(1.)
