@@ -18,7 +18,7 @@ subroutine read_boundary_data()
    nwbnd = 0
    ntwbnd = 0
    itwbndlast = 2
-   itwindbndlast = 1
+   itwindbndlast = 2
    !
    if (jonswapfile /= '') then
       !
@@ -502,7 +502,7 @@ subroutine update_wind_field(t)
        
       do itb = itwindbndlast, ntu10bnd ! Loop in time
          !
-         if (t_u10_bwv(itb)>t .or. itb==ntu10bnd) then
+         if (t_u10_bwv(itb)>=t .or. itb==ntu10bnd) then
             !
             tbfac  = (t - t_u10_bwv(itb - 1))/(t_u10_bwv(itb) - t_u10_bwv(itb - 1))
             !
@@ -740,7 +740,8 @@ subroutine read_wind_data_from_list()
    rewind(11)
    do it = 1, ntu10bnd
       ! 
-      read(11,*)t_u10_bwv(irec),u10str_it,u10dirstr_it   
+      !read(11,*)t_u10_bwv(it),u10str_it,u10dirstr_it   
+      read(11,*)t_u10_bwv(it),u10str_it,u10dirstr_it  
       !
       inquire(file=trim(u10str_it), exist=fileu10_exists)
       inquire(file=trim(u10dirstr_it), exist=fileu10dir_exists)
@@ -755,9 +756,9 @@ subroutine read_wind_data_from_list()
          !
          ! convert read value to double, and assign uniformly to grid
          !
-         write(*,*)'u10_it has uniform value of ', trim(u10dirstr)
+         write(*,*)'u10_it has uniform value of ', trim(u10str_it)
          read(u10str_it, '(f10.4)' )  u10_0
-         u10_bwv(it, :) = u10dir_0
+         u10_bwv(it, :) = u10_0
          !
       endif
       !
@@ -771,18 +772,18 @@ subroutine read_wind_data_from_list()
          !
          ! convert read value to double, and assign uniformly to grid
          !
-         write(*,*)'u10_it has uniform value of ', trim(u10dirstr)
+         write(*,*)'u10_it has uniform value of ', trim(u10dirstr_it)
          read(u10dirstr_it, '(f10.4)' )  u10dir_0
          u10dir_bwv(it, :) = u10dir_0
          !
       endif
-      !
-      u10dir_bwv=mod(270.0-u10dir_bwv, 360.0)*(4.0*atan(1.0))/180.0 ! from nautical coming from in degrees to cartesian going to in radians
-      !
-      close(11)
-      !
+      !   
    enddo
-   !   
+   !
+   close(11)
+   !
+   u10dir_bwv=mod(270.0-u10dir_bwv, 360.0)*(4.0*atan(1.0))/180.0 ! from nautical coming from in degrees to cartesian going to in radians
+   !
 end subroutine read_wind_data_from_list
 !
 !subroutine read_wind_field()

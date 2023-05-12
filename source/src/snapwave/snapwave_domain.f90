@@ -2,48 +2,49 @@ module snapwave_domain
 
 contains
 
-   subroutine initialize_snapwave_domain()
+subroutine initialize_snapwave_domain()
    !
    use snapwave_data
-   use snapwave_boundaries
+   !use snapwave_boundaries, only: read_boundary_enclosure, read_neumann_boundary
    use snapwave_results
    use snapwave_ncoutput
    use interp
+   use m_alloc
+   !
+   implicit none
    !
    ! Local input variables
    !
-   integer                                     :: k, j, k1, k2, nzs, ntp, inout
+   integer                                     :: k, j, k1, k2, nzs, ntp, ino,nsam, tri_num, itheta, ic, m, n 
    integer*4, dimension(:),     allocatable    :: indices
    real*8,    dimension(:),     allocatable    :: theta360d0 ! wave angles,sine and cosine of wave angles
    real*8,    dimension(:,:),   allocatable    :: ds360d0
    real*8,    dimension(:,:,:), allocatable    :: w360d0
    integer*4                                   :: idummy
    character*2                                 :: ext
-!   real*8  :: xmn, ymn
+   logical                                     :: file_exists
+   !real*8,    dimension(:),     allocatable    :: xsam, ysam, zsam
+   real*8, parameter                           :: dmiss=-99999.0
+   !real*8,    dimension(:),     allocatable    :: work
    !
    ! First set some constants
    !
-   pi   = 4*atan(1.0)
+   pi   = 4.*atan(1.0)
    g    = 9.81
    rho  = 1025.0
    np   = 22 ! why?
-   dt   = 36000.0
    tol  = 10.0   
    cosrot = cos(rotation*pi/180)
    sinrot = sin(rotation*pi/180)
    !
    write(*,*)'Initializing SnapWave domain ...'
    !
-   ! Load in mesh (no_faces, no_nodes, face_nodes, zb, x, y, xs, ys, msk)
-   !
-   gridfile = 'test3_net.nc'
-   j=index(gridfile,'.')
+   j=index(gridfile,'.')      
    ext = gridfile(j+1:j+2)
-   ext = 'qt'
-   !
    if (ext=='nc') then
       !
       call nc_read_net()
+      allocate(kp(np,no_nodes))
       !
    elseif (ext=='qt') then
       !
@@ -94,8 +95,8 @@ contains
    !
    ! Done with the mesh
    !
-   ntheta360 = int(360.1/dtheta)
-   ntheta    = int(180.1/dtheta)
+   ntheta360 = nint(360./dtheta)
+   ntheta    = nint(sector/dtheta)
    !
    ! Allocation of spatial arrays
    !
@@ -111,6 +112,7 @@ contains
    allocate(Hmx(no_nodes))
    allocate(fw(no_nodes))
    allocate(H(no_nodes))
+   allocate(Tp(no_nodes))
    allocate(kwav_ig(no_nodes))
    allocate(nwav_ig(no_nodes))
    allocate(C_ig(no_nodes))
@@ -118,48 +120,75 @@ contains
    allocate(sinhkh_ig(no_nodes))
    allocate(Hmx_ig(no_nodes))
    allocate(fw_ig(no_nodes))
-   allocate(H_ig(no_nodes))   
+   allocate(H_ig(no_nodes))
+   
    allocate(Dw(no_nodes))
    allocate(F(no_nodes))
    allocate(Fx(no_nodes))
    allocate(Fy(no_nodes))
+   allocate(u10(no_nodes))
+   allocate(u10dir(no_nodes))
    allocate(Df(no_nodes))
+   allocate(Sw(no_nodes))
+   allocate(St(no_nodes))
+   allocate(see(ntheta,no_nodes))
    allocate(thetam(no_nodes))
 !   allocate(uorb(no_nodes))
    allocate(ctheta(ntheta,no_nodes))
    allocate(ctheta_ig(ntheta,no_nodes))
    allocate(ctheta360(ntheta360,no_nodes))
    allocate(w(2,ntheta,no_nodes))
+   allocate(wu10(2,no_nodes))
    allocate(w360(2,ntheta360,no_nodes))
    allocate(w360d0(2,ntheta360,no_nodes))
    allocate(prev(2,ntheta,no_nodes))
+   allocate(prevu10(2,no_nodes))
    allocate(prev360(2,ntheta360,no_nodes))
    allocate(ds(ntheta,no_nodes))
+   allocate(dsu10(no_nodes))
    allocate(ds360(ntheta360,no_nodes))
    allocate(ds360d0(ntheta360,no_nodes))
    allocate(i360(ntheta))
    allocate(neumannconnected(no_nodes))
    allocate(tau(no_nodes))
-!   allocate(bndindx(no_nodes))
-!   allocate(F0tab(ntab))
-!   allocate(Fluxtab(no_nodes,ntab))
    allocate(theta(ntheta))
    allocate(dist(ntheta))
    allocate(theta360d0(ntheta360))
    allocate(theta360(ntheta360))
-!   allocate(sinth(ntheta))
-!   allocate(costh(ntheta))
-!   allocate(dist(ntheta))
-!   allocate(ee0(ntheta))
-!   allocate(x(no_nodes))
-!   allocate(y(no_nodes))
+   allocate(windspread360(ntheta360, no_nodes))
+   allocate(windspread(ntheta, no_nodes))
    allocate(ee(ntheta,no_nodes))
    allocate(ee_ig(ntheta,no_nodes))
    !
-   ! Spatially-uniform bottom friction coefficients
+   ! Spatially-uniform/varying bottom friction coefficients
    !
-   fw = fw0
-   fw_ig = fw0_ig
+   ! (1) Fw
+   !
+   inquire(file=trim(fwstr), exist=file_exists)
+   if (file_exists) then
+      call read_interpolate_map_input(fwstr,no_nodes, x, y, sferic, fw)
+   else   
+      ! convert read value to double, and assign uniformly to grid
+      write(*,*)'fw has uniform value of ', trim(fwstr)
+      read( fwstr, '(f10.4)' )  fw0
+      fw=fw0
+   endif
+   !
+   where(-zb>fwcutoff) fw = 0d0
+   !
+   ! (2) fw_ig
+   !
+   inquire(file=trim(fw_igstr), exist=file_exists)
+   if (file_exists) then
+      call read_interpolate_map_input(fw_igstr,no_nodes, x, y, sferic, fw_ig)
+   else   
+      ! convert read value to double, and assign uniformly to grid
+      write(*,*)'fw_ig has uniform value of ', trim(fw_igstr)
+      read( fw_igstr, '(f10.4)' )  fw0_ig
+      fw_ig=fw0_ig
+   endif
+   !
+   where(-zb>fwcutoff) fw_ig = 0d0
    !
    ! Initialization of reference tables
    !
@@ -172,15 +201,15 @@ contains
    !
    theta360d0 = theta360d0*pi/180.0
    !
-   kp      = 0
-   w       = 0.0
-   prev    = 0
-   ds      = 0.0
-   ee      = 0.0
-   ee_ig   = 0.0
-   ds360d0 = 0.d0
-   w360d0  = 0.d0
-   prev360 = 0
+   kp   = 0
+   w    = 0.0
+   prev = 0
+   ds   = 0.0
+   ee   = 0.0
+   ee_ig = 0.0
+   ds360d0=0.d0
+   w360d0 =0.d0
+   prev360=0
    !
    if (upwfile=='') then   
       !
@@ -196,21 +225,61 @@ contains
       ds360 = ds360d0*1.0
       w360  = w360d0*1.0
       !
+      !
       ! Read polygon outlining valid boundary points
       !
       call read_boundary_enclosure()
       !
-      do k=1,no_nodes
-          if (msk(k)==3) msk(k) = 1 ! Set outflow points to regular points
-          do itheta=1,ntheta360
-              if (ds360d0(itheta,k)==0.d0) then
-                  call ipon(x_bndenc,y_bndenc,n_bndenc,x(k),y(k),inout)
-                  if (inout>0) msk(k) = 2
+      if (n_bndenc > 0) then
+         !
+         do k=1,no_nodes
+             !
+             if (coupled_to_sfincs) then ! TL: think this is for SFINCS msk use only, not the same as Snapwave's msk=3 option!
+                if (msk(k)==3) msk(k) = 1 ! Set outflow points to regular points
+             endif
+             !
+             do itheta=1,ntheta360
+                 if (ds360d0(itheta,k)==0.d0) then
+                     call ipon(x_bndenc,y_bndenc,n_bndenc,x(k),y(k),ino)
+                     if (ino>0) msk(k)=2
+                 endif
+             enddo
+         enddo
+         !
+      endif
+      !
+      ! If present read neumann polyline
+      !
+      call read_neumann_boundary()
+      if (n_neu>0) then
+         !
+         call neuboundaries(x,y,no_nodes,x_neu,y_neu,n_neu,tol,neumannconnected)
+         !
+         do k=1,no_nodes
+           if (neumannconnected(k)>0) then
+              if (msk(k)==1) then
+                ! k is inner and can be neumannconnected
+                inner(neumannconnected(k))= .false.
+                msk(neumannconnected(k)) = 3
+              else
+                ! we don't allow neumannconnected links if the node is an open boundary
+                neumannconnected(k) = 0  
               endif
-          enddo
+           endif
+         enddo
+         !
+      else
+          neumannconnected = 0
+      endif
+      !
+      open(112,file='masktest.txt')
+      do k=1,no_nodes
+          write(112,*)x(k),y(k),dble(msk(k))
       enddo
+      close(112)
       !
       nb = 0
+      nnmb = 0
       do k = 1, no_nodes
          if (msk(k)==1) then
             inner(k) = .true.
@@ -218,15 +287,24 @@ contains
             inner(k) = .false.
          endif
          if (msk(k)==2) nb = nb + 1
+         if (msk(k)==3) nnmb = nnmb + 1
       enddo
       !
       allocate(nmindbnd(nb))
       !
+      if (nnmb>0) then
+         allocate(neubnd(nnmb))
+      endif
+      !
       nb = 0
+      nnmb = 0
       do k = 1, no_nodes
-         if (msk(k)>1) then    
+         if (msk(k)==2) then  ! ML: this used to be >1 but since neumann connected points are now msk(k)=3 changed this to ==2
             nb = nb + 1
             nmindbnd(nb) = k
+         elseif (msk(k)==3) then  
+            nnmb = nnmb + 1
+            neubnd(nnmb) = k   
          endif   
       enddo   
       !
@@ -259,13 +337,148 @@ contains
    theta360 = theta360*pi/180
    dtheta   = dtheta*pi/180
    !
-   end subroutine
-
-
-   subroutine find_upwind_neighbours(x,y,no_nodes,sferic,theta,ntheta,kp,np,w,prev,ds)
+   write(*,*)'Finished initializing SnapWave.'
    !
-   integer,                               intent(in)        :: no_nodes,ntheta     ! length of x,y; length of theta
-   integer,                               intent(in)        :: sferic             ! sferic (1) or cartesian (0) grid
+end subroutine initialize_snapwave_domain
+
+subroutine read_interpolate_map_input(tmpstr,no_nodes, x, y, sferic, proj)
+   !
+   ! reads samples from file and interpolates them onto the mesh x,y
+   !
+   use interp, only: triintfast
+   !
+   implicit none
+   !
+   character*256, intent(in)                   :: tmpstr
+   integer, intent(in)                         :: no_nodes
+   real*8, dimension(no_nodes), intent(in)     :: x, y
+   integer, intent(in)                         :: sferic
+   real*4, dimension(no_nodes), intent(out)    :: proj
+   real*8,    dimension(:),     allocatable    :: xsam, ysam, zsam
+   real*8,    dimension(:),     allocatable    :: work
+   real*4                                      :: t1, t2
+   integer                                     :: unit, nsam, iostat, k,jsferic, ino
+   !
+   allocate(work(no_nodes))
+   !
+   ! determine no of sample points
+   !
+   write(*,*)'Reading samples from ',trim(tmpstr)
+   open(unit = 500, file = trim(tmpstr))
+   nsam = 0
+   !
+   do
+     read(500,*,iostat=ino)
+     if (ino/=0) exit
+     nsam = nsam + 1
+   enddo
+   !
+   rewind(500)
+   write(*,*) nsam, 'samples read from ',trim(tmpstr)
+   !
+   ! allocate and read samples
+   !
+   allocate(xsam(nsam))
+   allocate(ysam(nsam))
+   do k=1,nsam
+      read(500,*) xsam(k), ysam(k), zsam(k)  
+   enddo
+   close(500)
+   !
+   ! Interpolate samples onto mesh
+   !
+   write(*,*) 'Interpolation of samples on mesh started...'
+   call timer(t1)
+   jsferic=sferic    ! not superfluous, jsferic gets changed inside triintfast routines
+   work=0d0
+   call triintfast(xsam, ysam, zsam, nsam, 1 ,x ,y, work, no_nodes, jsferic, 0d0, 1.1d0)
+   proj=real(work,kind(1.0))
+   call timer(t2)
+   write(*,*) nsam, ' samples interpolated on ', no_nodes, ' mesh nodes in ', t2-t1, ' s.'
+   !
+end subroutine read_interpolate_map_input
+!   
+subroutine find_upwind_neighbours_1dir(x,y,no_nodes,sferic,kp,np,dir,w,prev,ds)
+   !
+   ! finds the upwind neigbours for a specific direction, for example the mean wave direction or the wind direction (mapfields)
+   !
+   implicit none
+   !
+   real*8,  dimension(no_nodes),          intent(in)        :: x,y                 ! x, y coordinates of grid
+   integer,                               intent(in)        :: no_nodes            ! length of x,y;
+   integer,                               intent(in)        :: sferic              ! sferic (1) or cartesian (0) grid
+   integer,                               intent(in)        :: np                  ! number of boundary points
+   integer, dimension(np,no_nodes),       intent(in)        :: kp                  ! grid indices of surrounfing points per grid point
+   real*4, dimension(no_nodes),           intent(in)        :: dir                 ! mapfield of direction (e.g. mean wave direction or wind direction)
+   !
+   real*4,  dimension(2, no_nodes) ,      intent(out)       :: w                   ! per grid point, weight of upwind points
+   integer, dimension(2, no_nodes),       intent(out)       :: prev                ! per grid point, indices of upwind points
+   real*4,  dimension(no_nodes),          intent(out)       :: ds                  ! upwind distance to intersection point 
+   !
+   real*8,  dimension(2)                              :: xsect,ysect,ww
+   real*8                                             :: pi,dss,xi,yi
+   integer                                            :: ind1,ind2
+   integer                                            :: ip,nploc, itheta
+   integer                                            :: k 
+   real*8                                             :: circumf_eq=40075017.,circumf_pole=40007863.
+   !
+   ! Find upwind neighbours for the mean wave direction for each cell in an unstructured grid x,y (1d
+   ! vectors)
+   !
+   pi = 4*atan(1.0)
+   !
+   do k = 1, no_nodes
+      !
+      call findloc(kp(:,k), np, 0, nploc)
+      nploc = nploc - 1
+      !
+      if (kp(1,k)/=0) then
+         !
+         do ip = 1, nploc - 1
+            !
+            ind1 = kp(ip,k)
+            ind2 = kp(ip+1,k)
+            if (sferic==0) then
+               xsect=[x(ind1), x(ind2)]
+               ysect=[y(ind1), y(ind2)]
+               call intersect_angle(x(k), y(k), dir(k) + pi, xsect, ysect, ww, dss, xi, yi)
+            else
+               xsect=[x(ind1)-x(k), x(ind2)-x(k)]*circumf_eq/360.0*cosd(y(k))
+               ysect=[y(ind1)-y(k), y(ind2)-y(k)]*circumf_pole/360.0
+               call intersect_angle(0.d0, 0.d0, dir(k) + pi, xsect, ysect, ww, dss, xi, yi)
+            endif  
+            !
+            if (dss/=0) then
+               w(1,k) = ww(1)
+               w(2,k) = ww(2)
+               ds(k)  = dss
+               prev(1, k) = kp(ip  ,k  )
+               prev(2, k) = kp(ip+1,k )
+               exit
+            endif
+            !
+         enddo
+         !
+         if (dss==0) then
+            prev(1, k) = 1
+            prev(2, k) = 1
+            w(1, k)    = 0.0
+            w(2, k)    = 0.0 
+            ds(k)      = 0.0 ! very big number
+         endif
+         !
+      endif
+      !
+   enddo
+   !
+end subroutine find_upwind_neighbours_1dir
+!
+subroutine find_upwind_neighbours(x,y,no_nodes,sferic,theta,ntheta,kp,np,w,prev,ds)
+   !
+   implicit none
+   !
+   integer,                               intent(in)        :: no_nodes,ntheta,np  ! length of x,y; length of theta; length of neighbouring points
+   integer,                               intent(in)        :: sferic              ! sferic (1) or cartesian (0) grid
    real*8,  dimension(no_nodes),          intent(in)        :: x,y                 ! x, y coordinates of grid
    integer, dimension(np,no_nodes),       intent(in)        :: kp                  ! grid indices of surrounfing points per grid point
    real*8,  dimension(ntheta),            intent(in)        :: theta               ! array of wave angles
@@ -298,7 +511,7 @@ contains
                   ysect=[y(ind1), y(ind2)]
                   call intersect_angle(x(k), y(k), theta(itheta) + pi, xsect, ysect, ww, dss, xi, yi)
                else
-                  xsect=[x(ind1)-x(k), x(ind2)-x(k)]*circumf_eq/360.0*cos(y(k)*180.0/pi)
+                  xsect=[x(ind1)-x(k), x(ind2)-x(k)]*circumf_eq/360.0*cosd(y(k))
                   ysect=[y(ind1)-y(k), y(ind2)-y(k)]*circumf_pole/360.0
                   call intersect_angle(0.d0, 0.d0, theta(itheta) + pi, xsect, ysect, ww, dss, xi, yi)
                endif               
@@ -312,6 +525,7 @@ contains
                endif
             enddo
             if (dss==0) then
+!               write(*,*)k,x(k),y(k)
                prev(1, itheta, k) = 1
                prev(2, itheta, k) = 1
                w(1, itheta, k)    = 0.0
@@ -321,16 +535,17 @@ contains
       endif
    enddo
 
-   end subroutine find_upwind_neighbours
-
-
-   subroutine intersect_angle(x0, y0, phi, x, y, W, ds, xi, yi)
+end subroutine find_upwind_neighbours
+   
+subroutine intersect_angle(x0, y0, phi, x, y, W, ds, xi, yi)
+   !
+   implicit none
    !
    real*8, intent(in)               :: x0, y0, phi
    real*8, dimension(2),intent(in)  :: x, y
    real*8, dimension(2),intent(out) :: W
    real*8, intent(out)              :: ds, xi, yi
-   real*8                           :: eps, m, a, b, n, L, d1, d2
+   real*8                           :: eps, m, a, b, n, L, d1, d2, err
    !
    eps = 1.0e-2
    !
@@ -360,10 +575,13 @@ contains
       ds   = 0.0
    endif
    !
-   end subroutine intersect_angle
+end subroutine intersect_angle
+   
+   
 
-
-   subroutine fm_surrounding_points(xn,yn,zn,no_nodes,sferic,face_nodes,no_faces,kp,np,dhdx,dhdy)
+subroutine fm_surrounding_points(xn,yn,zn,no_nodes,sferic,face_nodes,no_faces,kp,np,dhdx,dhdy)
+   !
+   implicit none
    !
    real*8,  dimension(no_nodes),                 intent(in)  :: xn,yn              ! coordinates of network nodes
    real*4,  dimension(no_nodes),                 intent(in)  :: zn                 ! coordinates of network nodes
@@ -385,6 +603,9 @@ contains
    real*4,  dimension(np)                       :: xp,yp,zp              ! x,y,z of sorted surrounding nodes for each node
    real*8                                       :: circumf_eq=40075017.,circumf_pole=40007863.
    real*4                                       :: dxp,dyp
+   real*8                                       :: xs2, xsz, sy2, syz, sx2, sxz
+   !
+   integer                                      :: k, inode, knode, kcell, kn, ip, isp, j, jj, next, isp2
    !
    allocate(no_connected_cells(no_nodes))
    allocate(connected_cells(12,no_nodes))
@@ -487,7 +708,7 @@ contains
                sx2=sx2+(xp(j)-xn(kn))**2
                sy2=sy2+(yp(j)-yn(kn))**2
             else
-               dxp=(xp(j)-xn(kn))*circumf_eq/360.0*cos(yn(kn)*180.0/pi)
+               dxp=(xp(j)-xn(kn))*circumf_eq/360.0*cosd(yn(kn))
                dyp=(yp(j)-yn(kn))*circumf_pole/360.0
                sxz=sxz+dxp*(zp(j)-zn(kn))
                syz=syz+(yp(j)-yn(kn))*(zp(j)-zn(kn))
@@ -502,15 +723,19 @@ contains
           dhdy(kn)=0.
       endif
       !write(*,*)'fmgsp 2',kn, no_nodes,isp,isp2
+
    enddo
    !
-   end subroutine
+end subroutine
 
-   subroutine findloc(a,n,b,indx)
+subroutine findloc(a,n,b,indx)
    !
-   integer, dimension(n) :: a
-   integer               :: n,b
-   integer               :: indx,i
+   implicit none
+   !
+   integer, dimension(n), intent(in) :: a
+   integer, intent(in)               :: n,b
+   integer, intent(out)              :: indx
+   integer                           :: i
    !
    indx=-1
    do i=1,n
@@ -519,8 +744,10 @@ contains
          return
       endif
    enddo
-   end subroutine findloc
+end subroutine findloc
     
+
+subroutine linear_interp(x, y, n, xx, yy)
    !
    ! NAME
    !    linear_interp
@@ -538,7 +765,6 @@ contains
    !
    ! SOURCE
    !
-   subroutine linear_interp(x, y, n, xx, yy)
       integer,              intent(in) :: n
       real*4, dimension(n), intent(in) :: x
       real*4, dimension(n), intent(in) :: y
@@ -587,8 +813,9 @@ contains
 
       return
 
-   end subroutine linear_interp
+end subroutine linear_interp
 
+subroutine binary_search(xx, n, x, j)
    !****f* Interpolation/binary_search
    !
    ! NAME
@@ -609,163 +836,237 @@ contains
    !
    ! SOURCE
    !
-   subroutine binary_search(xx, n, x, j)
-      integer,              intent(in) :: N
-      real*4, dimension(N), intent(in) :: xx
-      real*4, intent(in)               :: x
-      integer, intent(out)             :: j
-      !****
-      !
-      ! CODE: binary search in (real) arrays
-      !
-      ! Requirement:
-      !    Parameter wp set to the proper kind
-      !
-      ! Subroutine from 'Numerical recipes' Fortran  edition.
-      ! Given an array XX of length N, given value X, return a value J
-      ! such that X is between XX(J) en XX (J+1)
-      ! XX must be monotonic, either decreasing or increasin
-      ! J=0 or J=N indicates X is out of range.
-
-
-      !
-      ! Local variables
-      !
-      integer   jl, ju, jm
-      logical   l1, l2
-
-      jl = 0
-      ju = n+1
-10    if (ju-jl .gt. 1) then
-         jm = (ju+jl)/2
-         l1 = xx(n) .gt. xx(1)
-         l2 = x .gt. xx(jm)
-         if ( (l1.and.l2) .or. (.not. (l1 .or. l2)) ) then
-            jl = jm
-         else
-            ju = jm
-         endif
-         goto 10
-      endif
-
-      j = jl
-
-      return
-
-   end subroutine binary_search
-
-
-   subroutine boundaries(x,y,no_nodes,xb,yb,nb,tol,bndpts,nobndpts,bndindx,bndweight)
-   
-   real*4,  dimension(no_nodes), intent(in)    :: x,y
-   integer,                intent(in)    :: no_nodes
-   real*4,  dimension(nb), intent(in)    :: xb,yb
-   integer,                intent(in)    :: nb
-   real*4,                 intent(in)    :: tol
-   integer                               :: nobndpts
-   integer, dimension(nobndpts)          :: bndpts
-   integer, dimension(2,nobndpts)        :: bndindx
-   real*4,  dimension(2,nobndpts)        :: bndweight
-   
-   integer                               :: ib,k,ibnd
-   real*4                                :: alpha, cosa,sina
-   
-   ibnd=0
-   do ib=1,nb-1
-    if (xb(ib).ne.-999.and. xb(ib+1).ne.-999) then
-      alpha=atan2(yb(ib+1)-yb(ib),xb(ib+1)-xb(ib))
-      cosa=cos(alpha)
-      sina=sin(alpha)
-      xend=(xb(ib+1)-xb(ib))*cosa+(yb(ib+1)-yb(ib))*sina
-      do k=1,no_nodes
-         x1= (x(k)-xb(ib))*cosa+(y(k)-yb(ib))*sina
-         y1=-(x(k)-xb(ib))*sina+(y(k)-yb(ib))*cosa
-         if (x1>=0. .and. x1<=xend) then
-            if (abs(y1)<tol) then
-               ibnd=ibnd+1
-               bndpts(ibnd)=k
-               bndindx(1,ibnd)=ib
-               bndindx(2,ibnd)=ib+1
-               bndweight(2,ibnd)=x1/xend
-               bndweight(1,ibnd)=1.-bndweight(2,ibnd)
-            endif
-         endif
-      enddo
-    endif
-   enddo
-   nobndpts=ibnd
-   
-   end subroutine boundaries            
-         
-
-
-   subroutine neuboundaries(x,y,no_nodes,xneu,yneu,nb,tol,neumannconnected)
+   integer,              intent(in) :: N
+   real*4, dimension(N), intent(in) :: xx
+   real*4, intent(in)               :: x
+   integer, intent(out)             :: j
+   !****
    !
-   real*4,  dimension(no_nodes), intent(in)    :: x,y
-   integer,                intent(in)    :: no_nodes
-   real*4,  dimension(nb), intent(in)    :: xneu,yneu
-   integer,                intent(in)    :: nb
-   real*4,                 intent(in)    :: tol
-   integer, dimension(no_nodes), intent(out)   :: neumannconnected   
-   integer, dimension(no_nodes)                :: nmpts                                           ! neumann points
-   integer                               :: Nnmpts                                          ! number of neumann points
-   integer                               :: ib,k,kmin
-   real*4                                :: alpha, cosa,sina, distmin, x1,y1,x2,y2
-   !   
-   ! Find all neumannpoints
-   ! 
-   nmpts = 0
-   Nnmpts = 0
-   do ib=1,nb-1
+   ! CODE: binary search in (real) arrays
+   !
+   ! Requirement:
+   !    Parameter wp set to the proper kind
+   !
+   ! Subroutine from 'Numerical recipes' Fortran  edition.
+   ! Given an array XX of length N, given value X, return a value J
+   ! such that X is between XX(J) en XX (J+1)
+   ! XX must be monotonic, either decreasing or increasin
+   ! J=0 or J=N indicates X is out of range.
+
+
+   !
+   ! Local variables
+   !
+   integer   jl, ju, jm
+   logical   l1, l2
+
+   jl = 0
+   ju = n+1
+10 if (ju-jl .gt. 1) then
+      jm = (ju+jl)/2
+      l1 = xx(n) .gt. xx(1)
+      l2 = x .gt. xx(jm)
+      if ( (l1.and.l2) .or. (.not. (l1 .or. l2)) ) then
+         jl = jm
+      else
+         ju = jm
+      endif
+      goto 10
+   endif
+
+   j = jl
+
+   return
+
+end subroutine binary_search
+
+!subroutine boundaries(x,y,no_nodes,xb,yb,nb,tol,bndpts,nobndpts,bndindx,bndweight)
+!   !
+!   implicit none
+!   !
+!   real*4,  dimension(no_nodes),        intent(in)    :: x,y
+!   integer,                             intent(in)    :: no_nodes
+!   real*4,  dimension(nb),              intent(in)    :: xb,yb
+!   integer,                             intent(in)    :: nb
+!   real*4,                              intent(in)    :: tol
+!   integer                                            :: nobndpts
+!   integer, dimension(nobndpts)                       :: bndpts
+!   integer, dimension(2,nobndpts)                     :: bndindx
+!   real*4,  dimension(2,nobndpts)                     :: bndweight
+!   !
+!   integer                               :: ib,k,ibnd
+!   real*4                                :: alpha, cosa,sina, x1, y1, xend
+!   !
+!   ibnd=0
+!   do ib=1,nb-1
+!    if (xb(ib).ne.-999.and. xb(ib+1).ne.-999) then
+!      alpha=atan2(yb(ib+1)-yb(ib),xb(ib+1)-xb(ib))
+!      cosa=cos(alpha)
+!      sina=sin(alpha)
+!      xend=(xb(ib+1)-xb(ib))*cosa+(yb(ib+1)-yb(ib))*sina
+!      do k=1,no_nodes
+!         x1= (x(k)-xb(ib))*cosa+(y(k)-yb(ib))*sina
+!         y1=-(x(k)-xb(ib))*sina+(y(k)-yb(ib))*cosa
+!         if (x1>=0. .and. x1<=xend) then
+!            if (abs(y1)<tol) then
+!               ibnd=ibnd+1
+!               bndpts(ibnd)=k
+!               bndindx(1,ibnd)=ib
+!               bndindx(2,ibnd)=ib+1
+!               bndweight(2,ibnd)=x1/xend
+!               bndweight(1,ibnd)=1.-bndweight(2,ibnd)
+!            endif
+!         endif
+!      enddo
+!    endif
+!   enddo
+!   nobndpts=ibnd
+!   
+!end subroutine boundaries     
+  
+subroutine neuboundaries(x,y,no_nodes,xneu,yneu,n_neu,tol,neumannconnected)
+   !
+   implicit none
+   !
+   integer, intent(in)                        :: no_nodes
+   integer, intent(in)                        :: n_neu
+   real*8, dimension(no_nodes), intent(in)    :: x,y
+   real*8, dimension(n_neu), intent(in)       :: xneu,yneu
+   real*4, intent(in)                         :: tol
+   integer, dimension(no_nodes), intent(out)  :: neumannconnected
+   !
+   integer                                    :: ib,k,kmin, k2
+   real*8                                     :: alpha, cosa,sina, distmin, x1,y1,x2,y2, xend
+   !
+   neumannconnected=0
+   do ib=1,n_neu-1
       if (xneu(ib).ne.-999.and.xneu(ib+1).ne.-999) then 
          alpha=atan2(yneu(ib+1)-yneu(ib),xneu(ib+1)-xneu(ib))
          cosa=cos(alpha)
          sina=sin(alpha)
-         xend=(xneu(ib+1)-xneu(ib))*cosa+(yneu(ib+1)-yneu(ib))*sina !xend is length of the polylinesegment in polyline coordinates 
+         xend=(xneu(ib+1)-xneu(ib))*cosa+(yneu(ib+1)-yneu(ib))*sina
          do k=1,no_nodes
-            x1= (x(k)-xneu(ib))*cosa+(y(k)-yneu(ib))*sina !parallel distance along polyline segment
-            y1=-(x(k)-xneu(ib))*sina+(y(k)-yneu(ib))*cosa !orthogonal distance to polyline segment 
-            if (x1>=0. .and. x1<=xend) then
+            x1= (x(k)-xneu(ib))*cosa+(y(k)-yneu(ib))*sina
+            y1=-(x(k)-xneu(ib))*sina+(y(k)-yneu(ib))*cosa
+            if (x1>=0.d0 .and. x1<=xend) then
                if (abs(y1)<tol) then
                   ! point k is on the neumann boundary
-                  Nnmpts = Nnmpts+1
-                  nmpts(Nnmpts) = k
-               endif
-            endif
-          enddo
-       endif
-    enddo
-    
-    !ML: find all neumanconnected INNER points (so needs a check to exlude outer points (list of neumanpoints nmpts))
-    do inmp = 1,Nnmpts 
-       k = nmpts(inmp)
-       if (k/=0) then
-          
-          x1= (x(k)-xneu(ib))*cosa+(y(k)-yneu(ib))*sina
-          y1=-(x(k)-xneu(ib))*sina+(y(k)-yneu(ib))*cosa
-              
-            distmin=1d10
-            kmin=0
-            do k2=1,no_nodes
-               x2= (x(k2)-xneu(ib))*cosa+(y(k2)-yneu(ib))*sina
-               y2=-(x(k2)-xneu(ib))*sina+(y(k2)-yneu(ib))*cosa
-               !choose point with parallel distance to neuman point within tolerance and with minimal orthogonal distance
-               if (abs(x2-x1)<tol .and. all(k2/=nmpts)) then 
-                  if (abs(y2-y1)<distmin) then
-                     kmin=k2
-                     distmin=abs(y2-y1)
+                  distmin=1d10
+                  kmin=0
+                  do k2=1,no_nodes
+                     x2= (x(k2)-xneu(ib))*cosa+(y(k2)-yneu(ib))*sina
+                     y2=-(x(k2)-xneu(ib))*sina+(y(k2)-yneu(ib))*cosa
+                     if (abs(x2-x1)<tol .and. (k2.ne.k)) then
+                        if (abs(y2-y1)<distmin) then
+                           kmin=k2
+                           distmin=abs(y2-y1)
+                        endif
+                     endif
+                  enddo
+                  if (kmin>0) then
+                     neumannconnected(kmin)=k
+                     write(*,*)kmin,k
                   endif
                endif
-            enddo
-            if (kmin>0) then
-               neumannconnected(kmin)=k
-               write(*,*)kmin,k
             endif
-         endif
-      enddo
-      !   
-   end subroutine neuboundaries
+         enddo
+      endif
+   enddo
+   !
+end subroutine neuboundaries
+  !
+subroutine read_neumann_boundary()
+   !
+   ! Reads neu file
+   !
+   use snapwave_data
+   !
+   implicit none
+   !
+   integer n, itb, ib, stat, ifreq
+   !
+   real*4 dummy,r
+   !
+   ! Read polylines
+   if (neumannfile(1:4) /= 'none') then    ! Normal ascii input files
+      write(*,*)neumannfile(1:4)
 
+      write(*,*)'Reading neumann boundary locations ...'
+      !
+      open(500, file=trim(neumannfile)) !as in bwvfile of SFINCS
+      do while(.true.)
+         read(500,*,iostat = stat)dummy
+         if (stat<0) exit
+         n_neu = n_neu + 1
+      enddo
+      rewind(500)
+      if (n_neu==0) then
+            write(*,*)'  neumann boundary enclosure file ',trim(neumannfile),' is empty or does not exist'
+      else           
+         allocate(x_neu(n_neu))
+         allocate(y_neu(n_neu))
+         do n = 1, n_neu
+            read(500,*)x_neu(n),y_neu(n)
+         enddo
+         close(500) 
+      endif
+   else
+      n_neu=0 ! There is no neumann boundary specified
+   endif
+      !
+end subroutine read_neumann_boundary
+   
+subroutine read_boundary_enclosure()
+   !
+   ! Reads enc file
+   !
+   use snapwave_data
+   !
+   implicit none
+   !
+   integer n, itb, ib, stat, ifreq
+   !
+   real*4 dummy,r
+   !
+   ! Read wave boundaries
+   !
+   if (encfile(1:4) /= 'none') then    
+      write(*,*)'Reading wave boundary enclosure ...'
+      open(500, file=trim(encfile)) !as in bwvfile of SFINCS
+      do while(.true.)
+         read(500,*,iostat = stat)dummy
+         if (stat<0) exit
+         n_bndenc = n_bndenc+1
+      enddo
+      rewind(500)
+      if (n_bndenc==0) then
+          write(*,*)'  boundary enclosure file ',trim(encfile),' is empty or does not exist'
+      endif
+      allocate(x_bndenc(n_bndenc))
+      allocate(y_bndenc(n_bndenc))
+      do n = 1, n_bndenc
+         read(500,*)x_bndenc(n),y_bndenc(n)
+      enddo
+      close(500)
+      !
+   else
+      n_bndenc = 0 
+   endif
+   !
+end subroutine read_boundary_enclosure
+   
+subroutine timer(t)
+   !
+   implicit none
+   !
+   real*4,intent(out)               :: t
+   !
+   integer*4                        :: count,count_rate,count_max
+   !
+   call system_clock (count,count_rate,count_max)
+   t = dble(count)/count_rate
+   !
+end subroutine timer
 
    subroutine read_snapwave_sfincs_mesh()
    !
@@ -773,10 +1074,10 @@ contains
    !
    implicit none
    !
-   integer*4,          dimension(:),   allocatable :: index_v_m
-   integer*4,          dimension(:),   allocatable :: index_v_n
-   integer*4,          dimension(:),   allocatable :: index_v_nm
-   integer*4,          dimension(:,:), allocatable :: index_g_nm
+   !integer*4,          dimension(:),   allocatable :: index_v_m
+   !integer*4,          dimension(:),   allocatable :: index_v_n
+   !integer*4,          dimension(:),   allocatable :: index_v_nm
+   !integer*4,          dimension(:,:), allocatable :: index_g_nm
    integer*4,          dimension(:),   allocatable :: indices
    !
    integer       :: k
