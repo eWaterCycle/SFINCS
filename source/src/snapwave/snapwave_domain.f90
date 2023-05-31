@@ -33,7 +33,6 @@ subroutine initialize_snapwave_domain()
    g    = 9.81
    rho  = 1025.0
    np   = 22 ! why?
-   tol  = 10.0   
    cosrot = cos(rotation*pi/180)
    sinrot = sin(rotation*pi/180)
    !
