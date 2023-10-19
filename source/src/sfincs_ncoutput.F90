@@ -604,7 +604,7 @@ contains
    real*4,    dimension(:),   allocatable :: vtmp
    integer*4, dimension(:),   allocatable :: vtmpi
    !
-   ! Very lazy for now
+   ! Very lazy for now. Should start using netcdf data from qtr file.
    !
    n_faces = quadtree_nr_points
    n_nodes = quadtree_nr_points*4
@@ -627,35 +627,34 @@ contains
       !
       n = quadtree_n(nmq)
       m = quadtree_m(nmq)
-         !
-         iref = quadtree_level(nmq)
-         dxdy  = quadtree_dxr(iref)
-         !         
-         nn = nn + 1
-         !
-         nodes_x(nn) = x0 + cosrot*(m - 1)*dxdy - sinrot*(n - 1)*dxdy
-         nodes_y(nn) = y0 + sinrot*(m - 1)*dxdy + cosrot*(n - 1)*dxdy
-         face_nodes(1, nmq) = nn
-         !         
-         nn = nn + 1
-         !
-         nodes_x(nn) = x0 + cosrot*(m    )*dxdy - sinrot*(n - 1)*dxdy
-         nodes_y(nn) = y0 + sinrot*(m    )*dxdy + cosrot*(n - 1)*dxdy
-         face_nodes(2, nmq) = nn
-         !         
-         nn = nn + 1
-         !
-         nodes_x(nn) = x0 + cosrot*(m    )*dxdy - sinrot*(n    )*dxdy
-         nodes_y(nn) = y0 + sinrot*(m    )*dxdy + cosrot*(n    )*dxdy
-         face_nodes(3, nmq) = nn
-         !         
-         nn = nn + 1
-         !
-         nodes_x(nn) = x0 + cosrot*(m - 1)*dxdy - sinrot*(n    )*dxdy
-         nodes_y(nn) = y0 + sinrot*(m - 1)*dxdy + cosrot*(n    )*dxdy
-         face_nodes(4, nmq) = nn
-         !
-!      endif
+      !
+      iref = quadtree_level(nmq)
+      dxdy  = quadtree_dxr(iref)
+      !         
+      nn = nn + 1
+      !
+      nodes_x(nn) = x0 + cosrot*(m - 1)*dxdy - sinrot*(n - 1)*dxdy
+      nodes_y(nn) = y0 + sinrot*(m - 1)*dxdy + cosrot*(n - 1)*dxdy
+      face_nodes(1, nmq) = nn
+      !         
+      nn = nn + 1
+      !
+      nodes_x(nn) = x0 + cosrot*(m    )*dxdy - sinrot*(n - 1)*dxdy
+      nodes_y(nn) = y0 + sinrot*(m    )*dxdy + cosrot*(n - 1)*dxdy
+      face_nodes(2, nmq) = nn
+      !         
+      nn = nn + 1
+      !
+      nodes_x(nn) = x0 + cosrot*(m    )*dxdy - sinrot*(n    )*dxdy
+      nodes_y(nn) = y0 + sinrot*(m    )*dxdy + cosrot*(n    )*dxdy
+      face_nodes(3, nmq) = nn
+      !         
+      nn = nn + 1
+      !
+      nodes_x(nn) = x0 + cosrot*(m - 1)*dxdy - sinrot*(n    )*dxdy
+      nodes_y(nn) = y0 + sinrot*(m - 1)*dxdy + cosrot*(n    )*dxdy
+      face_nodes(4, nmq) = nn
+      !
    enddo   
    !  
    NF90(nf90_create('sfincs_map.nc', ior(NF90_CLOBBER, NF90_64BIT_OFFSET), map_file%ncid))
