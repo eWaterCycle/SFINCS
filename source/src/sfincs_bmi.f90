@@ -159,14 +159,16 @@
       else
         x = c_loc(zb)
       end if
-   case("qsrc") ! river discharge input - values
-     x = c_loc(qsrc)
-   case("tsrc") ! river discharge input - time
-     x = c_loc(tsrc)
+   case("qsrc_1") ! river discharge input - values - preceeding timestep qsrc(i,1)
+     x = c_loc(qsrc(:,1)) !TL: please check whether this is the correct implementation
+   case("qsrc_2") ! river discharge input - values - exceeding timestep qsrc(i,2)
+     x = c_loc(qsrc(:,2)) !TL: please check whether this is the correct implementation
    case("xsrc") ! river discharge input - x locations
      x = c_loc(xsrc)
    case("ysrc") ! river discharge input - y locations
      x = c_loc(ysrc)     
+   case("tsrc") ! river discharge input - time
+     x = c_loc(tsrc)     
    case default
 	 write(*,*) 'get_var error'
      ! nullptr
@@ -190,7 +192,7 @@
    case("z_xz", "z_yz","zs","zb")     
       ! inverted shapes (fortran to c)
       var_shape(1) = np ! Number of grid cells
-   case("qsrc","xsrc","ysrc")     
+   case("qsrc_1","qsrc_2","xsrc","ysrc")     
       ! inverted shapes (fortran to c)
       var_shape(1) = nsrc ! Number of input discharge points      
    case("tsrc")     
@@ -215,7 +217,7 @@
    var_name = char_array_to_string(c_var_name, strlen(c_var_name))
 
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc")      
+   case("z_xz", "z_yz","zs","zb","qsrc_1","qsrc_2","tsrc","xsrc","ysrc")      
       var_type = "float"
    case default
      write(*,*) 'get_var_type error'
@@ -241,7 +243,7 @@
    var_name = char_array_to_string(c_var_name, strlen(c_var_name))
    
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc") 
+   case("z_xz", "z_yz","zs","zb","qsrc_1","qsrc_2","tsrc","xsrc","ysrc") 
       rank = 1
    case default
      write(*,*) 'get_var_rank error'
@@ -264,35 +266,44 @@
    character(len=strlen(c_var_name)) :: var_name
    integer :: i
 
-   var_name = char_array_to_string(c_var_name, strlen(c_var_name))
-   
-   call c_f_pointer(c_var_ptr, f_var_ptr, [np])
+   var_name = char_array_to_string(c_var_name, strlen(c_var_name))      
    
    select case(var_name)
    case("zs")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [np])  
      do i = 1, np ! Number of grid cells on entire grid
        f_var_ptr(i) = zs(i)
      end do
    case("zb")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [np])  
      do i = 1, np ! Number of grid cells on entire grid
        f_var_ptr(i) = zb(i)
      end do
-   case("qsrc")
-     do i = 1, ntsrc ! Number of input discharge points 'nsrc', and number of input discharge time indices 'ntsrc' > qsrc(nsrc,ntsrc)
-       f_var_ptr(i) = qsrc(i)
+   case("qsrc_1")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [nsrc])  
+     do i = 1, nsrc ! Number of input discharge points 'nsrc', for number of input discharge time indices 'ntsrc' is assumed is the precceding timestep ntsrc=1 > qsrc(nsrc,ntsrc)
+       f_var_ptr(i) = qsrc(i,1)
      end do
-   case("tsrc")
-     do i = 1, ntsrc ! Number input discharge time indices 'ntsrc' > tsrc(ntsrc)
-       f_var_ptr(i) = tsrc(i)
-     end do     
+   case("qsrc_2")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [nsrc])         
+     do i = 1, nsrc ! Number of input discharge points 'nsrc', for number of input discharge time indices 'ntsrc' is assumed is the precceding timestep ntsrc=2 > qsrc(nsrc,ntsrc)
+       f_var_ptr(i) = qsrc(i,2)
+     end do      
    case("xsrc")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [nsrc])         
      do i = 1, nsrc ! Number of input discharge points 'nsrc' > xsrc(nsrc)
        f_var_ptr(i) = xsrc(i)
      end do  
    case("ysrc")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [nsrc])         
      do i = 1, nsrc ! Number of input discharge points 'nsrc' > ysrc(nsrc)
        f_var_ptr(i) = ysrc(i)
      end do       
+   case("tsrc")
+     call c_f_pointer(c_var_ptr, f_var_ptr, [ntsrc])         
+     do i = 1, ntsrc ! Number input discharge time indices 'ntsrc' > tsrc(ntsrc)
+       f_var_ptr(i) = tsrc(i)
+     end do         
    case default
      write(*,*) 'set_var error'
      !nullptr
