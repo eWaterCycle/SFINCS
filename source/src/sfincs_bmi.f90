@@ -148,12 +148,10 @@
    
    select case(var_name)
    case("z_xz") ! x grid cell centre z_xz
-       x = c_loc(z_xz)
-	! x grid cell centre z_yz
-   case("z_yz")
-       x = c_loc(z_yz)
-   ! water level zs
-   case("zs")
+       x = c_loc(z_xz)	
+   case("z_yz") ! x grid cell centre z_yz
+       x = c_loc(z_yz)   
+   case("zs") ! water level zs
       x = c_loc(zs)
    case("zb") ! bed level
       if(subgrid) then
@@ -161,9 +159,15 @@
       else
         x = c_loc(zb)
       end if
-   case("qtsrc")
-     x = c_loc(qtsrc)
-   case("zst_bnd")
+   case("qsrc") ! river discharge input - values
+     x = c_loc(qsrc)
+   case("tsrc") ! river discharge input - time
+     x = c_loc(tsrc)
+   case("xsrc") ! river discharge input - x locations
+     x = c_loc(xsrc)
+   case("ysrc") ! river discharge input - y locations
+     x = c_loc(ysrc)     
+   case("zst_bnd") ! water level input - values
      x = c_loc(zst_bnd)
    case default
 	 write(*,*) 'get_var error'
@@ -185,9 +189,18 @@
    var_shape = (/0/)
    
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qtsrc","zst_bnd")     
+   case("z_xz", "z_yz","zs","zb")     
       ! inverted shapes (fortran to c)
-      var_shape(1) = np
+      var_shape(1) = np ! Number of grid cells
+   case("qsrc","xsrc","ysrc")     
+      ! inverted shapes (fortran to c)
+      var_shape(1) = nsrc ! Number of input discharge points      
+   case("tsrc")     
+      ! inverted shapes (fortran to c)
+      var_shape(1) = ntsrc ! Number of input discharge time indices            
+   case("zst_bnd")     
+      ! inverted shapes (fortran to c)
+      var_shape(1) = nbnd ! Number of input boundary points      
    case default
      write(*,*) 'get_var_shape error'
      ! nullptr
@@ -207,7 +220,7 @@
    var_name = char_array_to_string(c_var_name, strlen(c_var_name))
 
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qtsrc","zst_bnd")      
+   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc","zst_bnd")      
       var_type = "float"
    case default
      write(*,*) 'get_var_type error'
@@ -233,7 +246,7 @@
    var_name = char_array_to_string(c_var_name, strlen(c_var_name))
    
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qtsrc","zst_bnd") 
+   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc","zst_bnd") 
       rank = 1
    case default
      write(*,*) 'get_var_rank error'
@@ -262,19 +275,31 @@
    
    select case(var_name)
    case("zs")
-     do i = 1, np
+     do i = 1, np ! Number of grid cells on entire grid
        f_var_ptr(i) = zs(i)
      end do
    case("zb")
-     do i = 1, np
+     do i = 1, np ! Number of grid cells on entire grid
        f_var_ptr(i) = zb(i)
      end do
-   case("qtsrc")
-     do i = 1, np
-       f_var_ptr(i) = qtsrc(i)
+   case("qsrc")
+     do i = 1, ntsrc ! Number of input discharge points 'nsrc', and number of input discharge time indices 'ntsrc' > qsrc(nsrc,ntsrc)
+       f_var_ptr(i) = qsrc(i)
      end do
+   case("tsrc")
+     do i = 1, ntsrc ! Number input discharge time indices 'ntsrc' > tsrc(ntsrc)
+       f_var_ptr(i) = tsrc(i)
+     end do     
+   case("xsrc")
+     do i = 1, nsrc ! Number of input discharge points 'nsrc' > xsrc(nsrc)
+       f_var_ptr(i) = xsrc(i)
+     end do  
+   case("ysrc")
+     do i = 1, nsrc ! Number of input discharge points 'nsrc' > ysrc(nsrc)
+       f_var_ptr(i) = ysrc(i)
+     end do       
    case("zst_bnd")
-     do i = 1, np
+     do i = 1, nbnd ! Number of boundary points 'nbnd'
        f_var_ptr(i) = zst_bnd(i)
      end do
    case default
