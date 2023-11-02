@@ -167,8 +167,6 @@
      x = c_loc(xsrc)
    case("ysrc") ! river discharge input - y locations
      x = c_loc(ysrc)     
-   case("zst_bnd") ! water level input - values
-     x = c_loc(zst_bnd)
    case default
 	 write(*,*) 'get_var error'
      ! nullptr
@@ -197,10 +195,7 @@
       var_shape(1) = nsrc ! Number of input discharge points      
    case("tsrc")     
       ! inverted shapes (fortran to c)
-      var_shape(1) = ntsrc ! Number of input discharge time indices            
-   case("zst_bnd")     
-      ! inverted shapes (fortran to c)
-      var_shape(1) = nbnd ! Number of input boundary points      
+      var_shape(1) = ntsrc ! Number of input discharge time indices               
    case default
      write(*,*) 'get_var_shape error'
      ! nullptr
@@ -220,7 +215,7 @@
    var_name = char_array_to_string(c_var_name, strlen(c_var_name))
 
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc","zst_bnd")      
+   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc")      
       var_type = "float"
    case default
      write(*,*) 'get_var_type error'
@@ -246,7 +241,7 @@
    var_name = char_array_to_string(c_var_name, strlen(c_var_name))
    
    select case(var_name)
-   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc","zst_bnd") 
+   case("z_xz", "z_yz","zs","zb","qsrc","tsrc","xsrc","ysrc") 
       rank = 1
    case default
      write(*,*) 'get_var_rank error'
@@ -298,10 +293,6 @@
      do i = 1, nsrc ! Number of input discharge points 'nsrc' > ysrc(nsrc)
        f_var_ptr(i) = ysrc(i)
      end do       
-   case("zst_bnd")
-     do i = 1, nbnd ! Number of boundary points 'nbnd'
-       f_var_ptr(i) = zst_bnd(i)
-     end do
    case default
      write(*,*) 'set_var error'
      !nullptr
